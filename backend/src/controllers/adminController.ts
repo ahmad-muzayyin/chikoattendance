@@ -262,13 +262,21 @@ export const updateUser = async (req: Request, res: Response) => {
         // Security for HEAD
         const authReq = req as any;
 
+        // Fetch authenticated user to get branchId (JWT doesn't include it)
+        const authUser = await User.findByPk(authReq.user.id);
+        if (!authUser) {
+            return res.status(401).json({ message: 'User tidak terautentikasi' });
+        }
+
         console.log('🔍 UPDATE USER DEBUG:');
         console.log('User ID:', id);
         console.log('User branchId:', user.branchId);
-        console.log('Auth user:', authReq.user);
+        console.log('Auth user ID:', authUser.id);
+        console.log('Auth user role:', authUser.role);
+        console.log('Auth user branchId:', authUser.branchId);
         console.log('Request branchId:', branchId);
 
-        if (authReq.user && authReq.user.role === 'HEAD') {
+        if (authUser.role === 'HEAD') {
             console.log('✅ User is HEAD');
             // HEAD cannot edit OWNER users
             if (user.role === 'OWNER') {
@@ -276,17 +284,18 @@ export const updateUser = async (req: Request, res: Response) => {
                 return res.status(403).json({ message: 'Anda tidak dapat mengedit user dengan role OWNER.' });
             }
             // HEAD can only edit users in their branch
-            if (user.branchId !== authReq.user.branchId) {
+            if (user.branchId !== authUser.branchId) {
                 console.log('❌ User not in HEAD branch');
+                console.log('   User branchId:', user.branchId, 'vs Auth branchId:', authUser.branchId);
                 return res.status(403).json({ message: 'Tidak dapat mengedit user dari cabang lain.' });
             }
             // HEAD cannot change user to different branch
-            if (branchId && branchId !== authReq.user.branchId) {
+            if (branchId && branchId !== authUser.branchId) {
                 console.log('❌ Trying to change branch');
                 return res.status(403).json({ message: 'Anda tidak dapat memindahkan user ke cabang lain.' });
             }
             // Force branchId to HEAD's branch
-            branchId = authReq.user.branchId;
+            branchId = authUser.branchId;
             console.log('✅ Forced branchId to:', branchId);
         }
 
