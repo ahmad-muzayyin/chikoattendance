@@ -1,0 +1,79 @@
+// d:\AHMAD MUZAYYIN\ChikoAttendance\backend\src\server.ts
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import dotenv from 'dotenv';
+import authRoutes from './routes/authRoutes';
+import attendanceRoutes from './routes/attendanceRoutes';
+import branchRoutes from './routes/branchRoutes';
+import adminRoutes from './routes/adminRoutes';
+import notificationRoutes from './routes/notificationRoutes';
+import { connectDB } from './config/db';
+import { User, UserRole } from './models/User';
+
+dotenv.config();
+
+const app = express();
+const PORT = Number(process.env.PORT) || 3000;
+
+// ... (middleware code unchanged, no need to replace if not targeted, but tool replaces contiguous block)
+// I will target the imports and the startServer block separately or use a smaller chunk if possible but imports are at top and logic at bottom.
+
+// Let's do imports first manually or just overwrite the top part? 
+// The file is small, I can replace content strategically.
+
+// Let's Replace the Routes section and startServer section together if I encompass enough lines.
+// But it's safer to do 2 edits. Edit 1: Imports and Routes.
+
+app.use(cors());
+app.use(helmet());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - IP: ${req.ip}`);
+    next();
+});
+
+
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/branches', branchRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/notifications', notificationRoutes);
+
+// Test endpoint
+app.get('/api/ping', (req, res) => {
+    res.json({ message: 'Pong! Backend is reachable.', time: new Date() });
+});
+
+// Error handling
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error(err.stack);
+    res.status(500).json({ message: 'Internal Server Error' });
+});
+
+// Start Server
+const startServer = async () => {
+    await connectDB();
+
+    // Auto-promote admin to OWNER
+    try {
+        const admin = await User.findOne({ where: { email: 'admin@chiko.com' } });
+        if (admin && admin.role !== UserRole.OWNER) {
+            admin.role = UserRole.OWNER;
+            await admin.save();
+            console.log('Role updated: admin@chiko.com is now OWNER');
+        }
+    } catch (e) { console.error('Auto-promote error', e); }
+
+    // Listen
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server running on port ${PORT}`);
+        console.log(`Accessible from LAN at http://<YOUR_IP>:${PORT}`);
+    });
+};
+
+startServer();
