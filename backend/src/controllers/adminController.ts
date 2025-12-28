@@ -253,21 +253,41 @@ export const createUser = async (req: Request, res: Response) => {
 export const updateUser = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { name, email, password, role, branchId, position } = req.body;
+        const { name, email, password, role, position } = req.body;
+        let branchId = req.body.branchId;
 
         const user = await User.findByPk(id);
         if (!user) return res.status(404).json({ message: 'User tidak ditemukan' });
 
         // Security for HEAD
         const authReq = req as any;
+
+        console.log('🔍 UPDATE USER DEBUG:');
+        console.log('User ID:', id);
+        console.log('User branchId:', user.branchId);
+        console.log('Auth user:', authReq.user);
+        console.log('Request branchId:', branchId);
+
         if (authReq.user && authReq.user.role === 'HEAD') {
+            console.log('✅ User is HEAD');
             // HEAD cannot edit OWNER users
             if (user.role === 'OWNER') {
+                console.log('❌ Cannot edit OWNER');
                 return res.status(403).json({ message: 'Anda tidak dapat mengedit user dengan role OWNER.' });
             }
+            // HEAD can only edit users in their branch
             if (user.branchId !== authReq.user.branchId) {
+                console.log('❌ User not in HEAD branch');
                 return res.status(403).json({ message: 'Tidak dapat mengedit user dari cabang lain.' });
             }
+            // HEAD cannot change user to different branch
+            if (branchId && branchId !== authReq.user.branchId) {
+                console.log('❌ Trying to change branch');
+                return res.status(403).json({ message: 'Anda tidak dapat memindahkan user ke cabang lain.' });
+            }
+            // Force branchId to HEAD's branch
+            branchId = authReq.user.branchId;
+            console.log('✅ Forced branchId to:', branchId);
         }
 
         let updateData: any = { name, email, role, branchId, position };
@@ -275,7 +295,9 @@ export const updateUser = async (req: Request, res: Response) => {
             updateData.passwordHash = await bcrypt.hash(password, 10);
         }
 
+        console.log('📝 Update data:', updateData);
         await user.update(updateData);
+        console.log('✅ User updated successfully');
         res.json({ message: 'User berhasil diupdate' });
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
