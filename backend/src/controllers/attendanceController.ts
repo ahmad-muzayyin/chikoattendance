@@ -1,8 +1,9 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { Attendance, AttendanceType } from '../models/Attendance';
-import { User } from '../models/User';
+import { User, UserRole } from '../models/User';
 import { Branch } from '../models/Branch';
+import { Shift } from '../models/Shift';
 import { Punishment } from '../models/Punishment';
 import { AuditLog } from '../models/AuditLog';
 import { getDistance } from 'geolib';
@@ -23,18 +24,50 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: 'Invalid coordinates provided' });
         }
 
-        const user = await User.findByPk(userId, { include: [Branch] });
+        const user = await User.findByPk(userId, { include: [Branch, Shift] });
+
+        // Use strict type casting or check
+        const userRole = user?.role as UserRole;
+        const branch = user?.Branch as Branch | null;
+        const shift = user?.Shift as Shift | null;
+
+        let visitedBranchName = '';
 
         // Validation: Regular employees MUST have a branch
-        if (!user || (!user.branchId && user.role !== 'HEAD' && user.role !== 'OWNER')) {
+        if (!user || (!branch && userRole !== UserRole.HEAD && userRole !== UserRole.OWNER && userRole !== UserRole.SUPERVISOR)) {
             return res.status(400).json({ message: 'User not assigned to a branch' });
         }
 
-        const branch = user.Branch as Branch | null;
-
         // 1. Geofencing Check
-        // Only enforce for regular employees (Non-HEAD/OWNER)
-        if (user.role !== 'HEAD' && user.role !== 'OWNER') {
+        // SUPERVISOR: Check against ALL branches
+        if (userRole === UserRole.SUPERVISOR) {
+            const allBranches = await Branch.findAll();
+            let isWithinRange = false;
+            let nearestDist = Infinity;
+
+            for (const b of allBranches) {
+                const dist = getDistance(
+                    { latitude: lat, longitude: long },
+                    { latitude: b.latitude, longitude: b.longitude }
+                );
+
+                if (dist <= (b.radius || 100)) {
+                    isWithinRange = true;
+                    visitedBranchName = b.name;
+                    break; // Found a valid branch
+                }
+                if (dist < nearestDist) nearestDist = dist;
+            }
+
+            if (!isWithinRange) {
+                return res.status(400).json({
+                    message: 'Anda tidak berada di lokasi outlet manapun.',
+                    nearestDistance: nearestDist
+                });
+            }
+        }
+        // STAFF/HEAD/OWNER: Check against assigned branch (if enforced)
+        else if (userRole !== UserRole.HEAD && userRole !== UserRole.OWNER) {
             if (!branch) {
                 return res.status(400).json({ message: 'Data Cabang tidak ditemukan untuk user ini.' });
             }
@@ -54,6 +87,7 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
                     maxRadius: allowedRadius
                 });
             }
+            visitedBranchName = branch.name;
         }
 
         // 2. Check for double check-in
@@ -83,13 +117,10 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
 
         // Determine shift start time
         let shiftStart = new Date();
-        if (branch && branch.startHour) {
-            const [startHour, startMinute] = branch.startHour.split(':').map(Number);
-            shiftStart.setHours(startHour, startMinute, 0, 0);
-        } else {
-            // Default shift start if no branch setting (e.g. 09:00)
-            shiftStart.setHours(9, 0, 0, 0);
-        }
+        const startHourStr = shift?.startHour || branch?.startHour || '09:00';
+
+        const [startHour, startMinute] = startHourStr.split(':').map(Number);
+        shiftStart.setHours(startHour, startMinute, 0, 0);
 
         // Check if late (now > shiftStart)
         let isHalfDay = false;
@@ -157,7 +188,7 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
             isLate,
             isOvertime: false,
             isHalfDay,
-            notes: notes || (isLate ? 'Terlambat' : ''),
+            notes: notes || (visitedBranchName ? `Visit: ${visitedBranchName}` : '') || (isLate ? 'Terlambat' : ''),
             photoUrl
         });
 
@@ -194,22 +225,20 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
 
         if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
-        const user = await User.findByPk(userId, { include: [Branch] });
+        const user = await User.findByPk(userId, { include: [Branch, Shift] });
         if (!user) return res.status(404).json({ message: 'User not found' });
 
         const branch = user.Branch as Branch | null;
+        const shift = user.Shift as Shift | null;
         const now = new Date();
         let isOvertime = false;
 
         // Determine shift end time
         let shiftEnd = new Date();
-        if (branch && branch.endHour) {
-            const [endHour, endMinute] = branch.endHour.split(':').map(Number);
-            shiftEnd.setHours(endHour, endMinute, 0, 0);
-        } else {
-            // Default shift end (e.g. 17:00)
-            shiftEnd.setHours(17, 0, 0, 0);
-        }
+        const endHourStr = shift?.endHour || branch?.endHour || '17:00';
+
+        const [endHour, endMinute] = endHourStr.split(':').map(Number);
+        shiftEnd.setHours(endHour, endMinute, 0, 0);
 
         // Logic: "melebihi 3 jam dari jam pulang maka itu terhitung lembur"
         // 3 hours = 180 minutes

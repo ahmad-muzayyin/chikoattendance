@@ -1,34 +1,48 @@
 {
-    "expo": {
-        "name": "ChikoAttendance",
-        "slug": "chiko-attendance",
-        "version": "1.0.0",
-        "orientation": "portrait",
-        "icon": "./assets/logo.png",
-        "userInterfaceStyle": "light",
-        "splash": {
-            "image": "./assets/logo.png",
-            "resizeMode": "contain",
-            "backgroundColor": "#2563EB"
-        },
-        "assetBundlePatterns": [
-            "**/*"
-        ],
-        "ios": {
-            "supportsTablet": true,
-            "bundleIdentifier": "com.chiko.attendance"
-        },
-        "android": {
-            "adaptiveIcon": {
-                "foregroundImage": "./assets/logo.png",
-                "backgroundColor": "#2563EB"
-            },
-            "package": "com.chiko.attendance"
-        },
-        "web": {
-            "favicon": "./assets/logo.png"
-        },
-        "plugins": [],
-        "newArchEnabled": true
+  "expo": {
+    "name": "ChikoAttendance",
+    "slug": "chiko-attendance",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/adaptive-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chiko.attendance"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#EC1616"
+      },
+      "package": "com.chiko.attendance"
+    },
+    "web": {
+      "favicon": "./assets/logo.png"
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
+    "newArchEnabled": false,
+    "extra": {
+      "eas": {
+        "projectId": "0c277e4c-50cb-4331-a6d0-fb9c11201c94"
+      }
     }
+  }
 }

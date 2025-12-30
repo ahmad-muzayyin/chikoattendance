@@ -36,7 +36,7 @@ node --version
 npm --version
 ```
 
-```bash
+```bas 
 # Install Git, MySQL, dan tools lainnya
 sudo apt install -y git mysql-server nginx
 ```
@@ -663,3 +663,6 @@ Backend ChikoAttendance Anda sudah running di VM **`absensichiko-28122005`**!
 
 **Deployed on VM: absensichiko-28122005**  
 **Last Updated: 28 Desember 2025**
+
+
+34.50.89.217

@@ -266,7 +266,12 @@ export default function AttendanceInputScreen() {
                             style={styles.closeBtn}
                             onPress={() => {
                                 setResultModal({ ...resultModal, visible: false });
-                                if (resultModal.type === 'success') navigation.goBack();
+                                if (resultModal.type === 'success') {
+                                    // Reset camera and form for next attendance
+                                    setPhoto(null);
+                                    setNotes('');
+                                    navigation.goBack();
+                                }
                             }}
                         >
                             {resultModal.type === 'success' ? 'Selesai' : 'Tutup'}

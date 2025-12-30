@@ -1,7 +1,8 @@
 // d:\AHMAD MUZAYYIN\ChikoAttendance\mobile\src\screens\UserFormScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert } from 'react-native';
-import { TextInput, Button, Text, SegmentedButtons, List, Surface, Portal, Dialog, Modal, RadioButton, TouchableRipple } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { TextInput, Button, Text, SegmentedButtons, List, Surface, Portal, Dialog, Modal } from 'react-native-paper';
+import { CustomRadioButton, CustomAlert } from '../components';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -27,6 +28,21 @@ export default function UserFormScreen() {
     // Position Logic
     const [position, setPosition] = useState(editingUser?.position || '');
     const COMMON_POSITIONS = ['Koki', 'Pelayan', 'Kasir', 'Barista', 'Helper', 'Admin', 'Supervisor'];
+
+    // Helper function to get icon for each position
+    const getPositionIcon = (position: string) => {
+        const iconMap: { [key: string]: string } = {
+            'Koki': 'chef-hat',
+            'Pelayan': 'room-service',
+            'Kasir': 'cash-register',
+            'Barista': 'coffee',
+            'Helper': 'hand-heart',
+            'Admin': 'laptop',
+            'Supervisor': 'account-tie',
+        };
+        return iconMap[position] || 'briefcase';
+    };
+
     const [showPositionDialog, setShowPositionDialog] = useState(false);
 
     // Initial Branch Logic
@@ -41,9 +57,22 @@ export default function UserFormScreen() {
     const [showBranchDialog, setShowBranchDialog] = useState(false);
     const [showSuccessDialog, setShowSuccessDialog] = useState(false);
 
+    // CustomAlert state
+    const [alertVisible, setAlertVisible] = useState(false);
+    const [alertConfig, setAlertConfig] = useState({
+        type: 'info' as 'success' | 'error' | 'warning' | 'info',
+        title: '',
+        message: ''
+    });
+
+
     useEffect(() => {
-        if (!isHead) fetchBranches();
-        if (isHead) setBranchId(currentUser?.branchId?.toString());
+        // Fetch branches for display purposes (even for HEAD)
+        fetchBranches();
+        // HEAD users can only assign to their own branch
+        if (isHead && !editingUser) {
+            setBranchId(currentUser?.branchId?.toString() || '');
+        }
     }, [isHead]);
 
     // Get selected branch name
@@ -63,7 +92,12 @@ export default function UserFormScreen() {
 
     const handleSubmit = async () => {
         if (!name || !email || (!editingUser && !password)) {
-            Alert.alert('Peringatan', 'Mohon isi semua field wajib.');
+            setAlertConfig({
+                type: 'warning',
+                title: 'Peringatan',
+                message: 'Mohon isi semua field wajib (Nama, Email, Password).'
+            });
+            setAlertVisible(true);
             return;
         }
 
@@ -76,19 +110,41 @@ export default function UserFormScreen() {
 
             const method = editingUser ? 'put' : 'post';
 
-            await axios[method](url, {
+            // For HEAD users, ensure branchId is their own branch
+            let finalBranchId = branchId ? parseInt(branchId) : null;
+            if (isHead) {
+                // HEAD must use their own branchId
+                finalBranchId = parseInt(currentUser?.branchId?.toString() || '0');
+            }
+
+            const payload = {
                 name,
                 email,
                 password: password || undefined,
                 role,
-                branchId: branchId ? parseInt(branchId) : null,
+                branchId: finalBranchId,
                 position: role === 'EMPLOYEE' ? position : null
-            }, { headers: { Authorization: `Bearer ${token}` } });
+            };
+
+            console.log('=== USER FORM DEBUG ===');
+            console.log('Is HEAD:', isHead);
+            console.log('Current User Branch:', currentUser?.branchId);
+            console.log('Editing User:', editingUser?.id);
+            console.log('Editing User Branch:', editingUser?.branchId);
+            console.log('Payload:', payload);
+            console.log('=====================');
+
+            await axios[method](url, payload, { headers: { Authorization: `Bearer ${token}` } });
 
             // Show Custom Success Dialog
             setShowSuccessDialog(true);
         } catch (error: any) {
-            Alert.alert('Error', error?.response?.data?.message || 'Gagal menyimpan data user.');
+            setAlertConfig({
+                type: 'error',
+                title: 'Error',
+                message: error?.response?.data?.message || 'Gagal menyimpan data user.'
+            });
+            setAlertVisible(true);
         } finally {
             setLoading(false);
         }
@@ -143,17 +199,49 @@ export default function UserFormScreen() {
                     left={<TextInput.Icon icon="lock" />}
                 />
 
-                <Text style={styles.label}>Role / Jabatan</Text>
-                <SegmentedButtons
-                    value={role}
-                    onValueChange={setRole}
-                    buttons={[
-                        ...(isHead ? [] : [{ value: 'OWNER', label: 'Owner' }]), // Head cannot create Owner
-                        ...(isHead ? [] : [{ value: 'HEAD', label: 'Head' }]),   // Head cannot create Head (usually)
-                        { value: 'EMPLOYEE', label: 'Staf' },
-                    ]}
-                    style={styles.segmented}
-                />
+                <Text style={styles.sectionTitle}>Role / Jabatan</Text>
+                <View style={styles.roleContainer}>
+                    {!isHead && (
+                        <TouchableOpacity
+                            style={[styles.roleCard, role === 'OWNER' && styles.roleCardSelected]}
+                            onPress={() => setRole('OWNER')}
+                            activeOpacity={0.7}
+                        >
+                            <View style={[styles.roleIconContainer, role === 'OWNER' && styles.roleIconSelected]}>
+                                <MaterialCommunityIcons name="crown" size={24} color={role === 'OWNER' ? colors.primary : '#6B7280'} />
+                            </View>
+                            <Text style={[styles.roleLabel, role === 'OWNER' && styles.roleLabelSelected]}>Owner</Text>
+                            <Text style={styles.roleDescription}>Akses penuh</Text>
+                            {role === 'OWNER' && <MaterialCommunityIcons name="check-circle" size={20} color={colors.primary} style={styles.roleCheck} />}
+                        </TouchableOpacity>
+                    )}
+                    {!isHead && (
+                        <TouchableOpacity
+                            style={[styles.roleCard, role === 'HEAD' && styles.roleCardSelected]}
+                            onPress={() => setRole('HEAD')}
+                            activeOpacity={0.7}
+                        >
+                            <View style={[styles.roleIconContainer, role === 'HEAD' && styles.roleIconSelected]}>
+                                <MaterialCommunityIcons name="account-tie" size={24} color={role === 'HEAD' ? colors.primary : '#6B7280'} />
+                            </View>
+                            <Text style={[styles.roleLabel, role === 'HEAD' && styles.roleLabelSelected]}>Kepala Toko</Text>
+                            <Text style={styles.roleDescription}>Kelola cabang</Text>
+                            {role === 'HEAD' && <MaterialCommunityIcons name="check-circle" size={20} color={colors.primary} style={styles.roleCheck} />}
+                        </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                        style={[styles.roleCard, role === 'EMPLOYEE' && styles.roleCardSelected]}
+                        onPress={() => setRole('EMPLOYEE')}
+                        activeOpacity={0.7}
+                    >
+                        <View style={[styles.roleIconContainer, role === 'EMPLOYEE' && styles.roleIconSelected]}>
+                            <MaterialCommunityIcons name="account" size={24} color={role === 'EMPLOYEE' ? colors.primary : '#6B7280'} />
+                        </View>
+                        <Text style={[styles.roleLabel, role === 'EMPLOYEE' && styles.roleLabelSelected]}>Karyawan</Text>
+                        <Text style={styles.roleDescription}>Fitur dasar</Text>
+                        {role === 'EMPLOYEE' && <MaterialCommunityIcons name="check-circle" size={20} color={colors.primary} style={styles.roleCheck} />}
+                    </TouchableOpacity>
+                </View>
 
                 {role === 'EMPLOYEE' && (
                     <>
@@ -185,6 +273,20 @@ export default function UserFormScreen() {
                     </>
                 )}
 
+                {isHead && (
+                    <>
+                        <Text style={styles.label}>Penempatan Outlet</Text>
+                        <Surface style={[styles.branchSelectCard, styles.branchInfoCard]} elevation={0}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.branchSelectLabel}>Outlet</Text>
+                                <Text style={styles.branchSelectValue}>{selectedBranchName}</Text>
+                                <Text style={styles.branchInfoText}>Otomatis sesuai cabang Anda</Text>
+                            </View>
+                            <MaterialCommunityIcons name="information" size={24} color={colors.primary} />
+                        </Surface>
+                    </>
+                )}
+
                 <Button
                     mode="contained"
                     onPress={handleSubmit}
@@ -197,78 +299,150 @@ export default function UserFormScreen() {
                 </Button>
             </Surface>
 
-            {/* Position Selection Dialog */}
+            {/* Position Selection Modal - Modern Design */}
             <Portal>
-                <Dialog visible={showPositionDialog} onDismiss={() => setShowPositionDialog(false)} style={{ backgroundColor: colors.surface }}>
-                    <Dialog.Title style={{ textAlign: 'center', fontWeight: 'bold' }}>Pilih Posisi</Dialog.Title>
-                    <Dialog.Content style={{ maxHeight: 400 }}>
-                        <ScrollView>
-                            <TextInput
-                                label="Posisi Baru / Lainnya"
-                                value={position}
-                                onChangeText={setPosition}
+                <Modal
+                    visible={showPositionDialog}
+                    onDismiss={() => setShowPositionDialog(false)}
+                    contentContainerStyle={styles.modalContainer}
+                >
+                    <Surface style={styles.modalSurface} elevation={5}>
+                        {/* Modal Header */}
+                        <View style={styles.modalHeader}>
+                            <View style={styles.modalIconContainer}>
+                                <MaterialCommunityIcons name="briefcase" size={28} color={colors.primary} />
+                            </View>
+                            <Text style={styles.modalTitle}>Pilih Posisi</Text>
+                            <Text style={styles.modalSubtitle}>Tentukan posisi pekerjaan karyawan</Text>
+                        </View>
+
+                        {/* Custom Input for Other Position */}
+                        <View style={styles.modalContent}>
+                            {!COMMON_POSITIONS.includes(position) && (
+                                <View style={styles.customInputContainer}>
+                                    <TextInput
+                                        label="Posisi Kustom"
+                                        value={position}
+                                        onChangeText={setPosition}
+                                        mode="outlined"
+                                        style={styles.customPositionInput}
+                                        placeholder="Ketik posisi kustom"
+                                        left={<TextInput.Icon icon="pencil" />}
+                                        right={<TextInput.Icon icon="close" onPress={() => setPosition('')} />}
+                                    />
+                                </View>
+                            )}
+
+                            <Text style={styles.sectionLabel}>Pilih posisi:</Text>
+
+                            {/* CustomRadioButton */}
+                            <ScrollView style={styles.radioScrollView} showsVerticalScrollIndicator={false}>
+                                <CustomRadioButton
+                                    options={COMMON_POSITIONS.map(pos => ({
+                                        label: pos,
+                                        value: pos,
+                                        icon: getPositionIcon(pos),
+                                    }))}
+                                    value={position}
+                                    onSelect={(value) => {
+                                        setPosition(value);
+                                        // Smooth close with animation
+                                        setTimeout(() => {
+                                            setShowPositionDialog(false);
+                                        }, 200);
+                                    }}
+                                />
+                            </ScrollView>
+                        </View>
+
+                        {/* Modal Actions */}
+                        <View style={styles.modalActions}>
+                            <Button
                                 mode="outlined"
-                                style={[styles.input, { marginBottom: 15 }]}
-                                placeholder="Ketik manual jika tidak ada di list"
-                            />
-                            <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 8, fontWeight: 'bold' }}>Saran Posisi:</Text>
-                            {COMMON_POSITIONS.map((pos) => (
-                                <TouchableRipple key={pos} onPress={() => { setPosition(pos); setShowPositionDialog(false); }} style={styles.branchOption}>
-                                    <View style={styles.branchRow}>
-                                        <RadioButton
-                                            value={pos}
-                                            status={position === pos ? 'checked' : 'unchecked'}
-                                            color={colors.primary}
-                                            onPress={() => { setPosition(pos); setShowPositionDialog(false); }}
-                                        />
-                                        <Text style={styles.branchOptionText}>{pos}</Text>
-                                    </View>
-                                </TouchableRipple>
-                            ))}
-                        </ScrollView>
-                    </Dialog.Content>
-                    <Dialog.Actions>
-                        <Button onPress={() => setShowPositionDialog(false)}>Selesai</Button>
-                    </Dialog.Actions>
-                </Dialog>
+                                onPress={() => setShowPositionDialog(false)}
+                                style={styles.modalCancelButton}
+                                labelStyle={styles.modalCancelButtonLabel}
+                            >
+                                Batal
+                            </Button>
+                            <Button
+                                mode="contained"
+                                onPress={() => setShowPositionDialog(false)}
+                                style={styles.modalConfirmButton}
+                                labelStyle={styles.modalConfirmButtonLabel}
+                                disabled={!position}
+                            >
+                                Selesai
+                            </Button>
+                        </View>
+                    </Surface>
+                </Modal>
             </Portal>
 
-            {/* Branch Selection Dialog */}
+
+            {/* Branch Selection Modal - Modern Design */}
             <Portal>
-                <Dialog visible={showBranchDialog} onDismiss={() => setShowBranchDialog(false)} style={{ backgroundColor: colors.surface }}>
-                    <Dialog.Title style={{ textAlign: 'center', fontWeight: 'bold' }}>Pilih Outlet</Dialog.Title>
-                    <Dialog.Content style={{ maxHeight: 400 }}>
-                        <ScrollView>
-                            <TouchableRipple onPress={() => { setBranchId(''); setShowBranchDialog(false); }} style={styles.branchOption}>
-                                <View style={styles.branchRow}>
-                                    <RadioButton
-                                        value=""
-                                        status={branchId === '' ? 'checked' : 'unchecked'}
-                                        color={colors.primary}
-                                        onPress={() => { setBranchId(''); setShowBranchDialog(false); }}
-                                    />
-                                    <Text style={styles.branchOptionText}>Toko Pusat / Semua</Text>
-                                </View>
-                            </TouchableRipple>
-                            {branches.map((b: any) => (
-                                <TouchableRipple key={b.id} onPress={() => { setBranchId(b.id.toString()); setShowBranchDialog(false); }} style={styles.branchOption}>
-                                    <View style={styles.branchRow}>
-                                        <RadioButton
-                                            value={b.id.toString()}
-                                            status={branchId === b.id.toString() ? 'checked' : 'unchecked'}
-                                            color={colors.primary}
-                                            onPress={() => { setBranchId(b.id.toString()); setShowBranchDialog(false); }}
-                                        />
-                                        <Text style={styles.branchOptionText}>{b.name}</Text>
-                                    </View>
-                                </TouchableRipple>
-                            ))}
-                        </ScrollView>
-                    </Dialog.Content>
-                    <Dialog.Actions>
-                        <Button onPress={() => setShowBranchDialog(false)}>Batal</Button>
-                    </Dialog.Actions>
-                </Dialog>
+                <Modal
+                    visible={showBranchDialog}
+                    onDismiss={() => setShowBranchDialog(false)}
+                    contentContainerStyle={styles.modalContainer}
+                >
+                    <Surface style={styles.modalSurface} elevation={5}>
+                        {/* Modal Header */}
+                        <View style={styles.modalHeader}>
+                            <View style={styles.modalIconContainer}>
+                                <MaterialCommunityIcons name="store" size={28} color={colors.primary} />
+                            </View>
+                            <Text style={styles.modalTitle}>Pilih Outlet</Text>
+                            <Text style={styles.modalSubtitle}>Tentukan penempatan outlet karyawan</Text>
+                        </View>
+
+                        {/* Modal Content */}
+                        <View style={styles.modalContent}>
+                            <ScrollView style={styles.radioScrollView} showsVerticalScrollIndicator={false}>
+                                <CustomRadioButton
+                                    options={[
+                                        { label: 'Toko Pusat / Semua', value: '', icon: 'home-city' },
+                                        ...branches.map((b: any) => ({
+                                            label: b.name,
+                                            value: b.id.toString(),
+                                            icon: 'store-marker',
+                                            description: b.address || 'Outlet cabang'
+                                        }))
+                                    ]}
+                                    value={branchId}
+                                    onSelect={(value) => {
+                                        setBranchId(value);
+                                        // Smooth close with animation
+                                        setTimeout(() => {
+                                            setShowBranchDialog(false);
+                                        }, 200);
+                                    }}
+                                />
+                            </ScrollView>
+                        </View>
+
+                        {/* Modal Actions */}
+                        <View style={styles.modalActions}>
+                            <Button
+                                mode="outlined"
+                                onPress={() => setShowBranchDialog(false)}
+                                style={styles.modalCancelButton}
+                                labelStyle={styles.modalCancelButtonLabel}
+                            >
+                                Batal
+                            </Button>
+                            <Button
+                                mode="contained"
+                                onPress={() => setShowBranchDialog(false)}
+                                style={styles.modalConfirmButton}
+                                labelStyle={styles.modalConfirmButtonLabel}
+                            >
+                                Selesai
+                            </Button>
+                        </View>
+                    </Surface>
+                </Modal>
             </Portal>
 
             {/* Success Modal */}
@@ -304,6 +478,15 @@ export default function UserFormScreen() {
                 </Modal>
             </Portal>
 
+            {/* CustomAlert for Errors/Warnings */}
+            <CustomAlert
+                visible={alertVisible}
+                onDismiss={() => setAlertVisible(false)}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+            />
+
         </ScrollView >
     );
 }
@@ -337,6 +520,65 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#FFF'
     },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: colors.textPrimary,
+        marginTop: spacing.lg,
+        marginBottom: spacing.md,
+    },
+    roleContainer: {
+        flexDirection: 'row',
+        gap: 12,
+        marginBottom: spacing.md,
+        flexWrap: 'wrap',
+    },
+    roleCard: {
+        flex: 1,
+        minWidth: '30%',
+        backgroundColor: '#F9FAFB',
+        borderWidth: 2,
+        borderColor: '#E5E7EB',
+        borderRadius: 16,
+        padding: 16,
+        alignItems: 'center',
+        position: 'relative',
+    },
+    roleCardSelected: {
+        backgroundColor: '#FEF2F2',
+        borderColor: colors.primary,
+    },
+    roleIconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#F3F4F6',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 8,
+    },
+    roleIconSelected: {
+        backgroundColor: '#FEE2E2',
+    },
+    roleLabel: {
+        fontSize: 10,
+        fontWeight: '600',
+        color: '#374151',
+        marginBottom: 2,
+    },
+    roleLabelSelected: {
+        color: colors.primary,
+    },
+    roleDescription: {
+        fontSize: 8,
+        color: '#9CA3AF',
+        textAlign: 'center',
+    },
+    roleCheck: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+    },
     label: {
         fontSize: 14,
         fontWeight: '700',
@@ -368,8 +610,19 @@ const styles = StyleSheet.create({
     },
     branchSelectValue: {
         fontSize: 16,
-        fontWeight: 'bold',
+        fontWeight: '600',
         color: colors.textPrimary,
+        marginTop: 4,
+    },
+    branchInfoCard: {
+        backgroundColor: '#FEF2F2',
+        borderColor: '#FEE2E2',
+    },
+    branchInfoText: {
+        fontSize: 11,
+        color: '#9CA3AF',
+        marginTop: 4,
+        fontStyle: 'italic',
     },
     submitBtn: {
         borderRadius: borderRadius.lg,
@@ -439,5 +692,94 @@ const styles = StyleSheet.create({
         marginTop: spacing.lg,
         width: '100%',
         borderRadius: borderRadius.lg,
-    }
+    },
+    // Modern Modal Styles
+    modalContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        paddingHorizontal: 20,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    modalSurface: {
+        borderRadius: 24,
+        backgroundColor: '#FFFFFF',
+        maxHeight: '80%',
+    },
+    modalHeader: {
+        alignItems: 'center',
+        paddingTop: 24,
+        paddingHorizontal: 24,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+    },
+    modalIconContainer: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#FEE2E2',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 12,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1F2937',
+        marginBottom: 4,
+    },
+    modalSubtitle: {
+        fontSize: 14,
+        color: '#6B7280',
+        textAlign: 'center',
+    },
+    modalContent: {
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+    },
+    customInputContainer: {
+        marginBottom: 16,
+        backgroundColor: '#FEF2F2',
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#FEE2E2',
+    },
+    customPositionInput: {
+        backgroundColor: '#FFFFFF',
+    },
+    sectionLabel: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#374151',
+        marginBottom: 12,
+        marginTop: 8,
+    },
+    radioScrollView: {
+        maxHeight: 300,
+    },
+    modalActions: {
+        flexDirection: 'row',
+        gap: 12,
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        borderTopWidth: 1,
+        borderTopColor: '#F3F4F6',
+    },
+    modalCancelButton: {
+        flex: 1,
+        borderRadius: 12,
+    },
+    modalConfirmButton: {
+        flex: 1,
+        borderRadius: 12,
+    },
+    modalCancelButtonLabel: {
+        color: colors.primary,
+        fontWeight: '600',
+    },
+    modalConfirmButtonLabel: {
+        color: '#FFFFFF',
+        fontWeight: '600',
+    },
 });

@@ -9,6 +9,7 @@ import {
     Dimensions,
     RefreshControl,
     Platform,
+    Image,
 } from 'react-native';
 import { Text, Avatar, Surface, useTheme } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
@@ -156,14 +157,15 @@ export default function HomeScreen() {
             <View style={styles.header}>
                 {/* Background Pattern / Watermark Logo */}
                 <View style={styles.watermarkContainer}>
-                    <MaterialCommunityIcons name="fingerprint" size={300} color="rgba(255,255,255,0.1)" style={{ transform: [{ rotate: '-20deg' }] }} />
-                </View>
-                <View style={styles.watermarkContainerSecondary}>
-                    <MaterialCommunityIcons name="fingerprint" size={150} color="rgba(255,255,255,0.05)" style={{ transform: [{ rotate: '15deg' }] }} />
+                    <Image
+                        source={require('../../assets/hc.png')}
+                        style={styles.watermarkLogo}
+                        resizeMode="contain"
+                    />
                 </View>
 
                 <View style={styles.headerTop}>
-                    <View>
+                    <View style={styles.headerLeft}>
                         <Text style={styles.greeting}>{getGreeting()}</Text>
                         <Text style={styles.userName}>{user?.name || 'User'}</Text>
                         <View style={styles.roleBadge}>
@@ -171,7 +173,12 @@ export default function HomeScreen() {
                             <Text style={styles.roleText}>{user?.role || 'Employee'}</Text>
                         </View>
                     </View>
-                    <TouchableOpacity onPress={() => navigation.navigate('ProfileTab' as never)} activeOpacity={0.8}>
+
+                    <TouchableOpacity
+                        onPress={() => navigation.navigate('ProfileTab' as never)}
+                        activeOpacity={0.8}
+                        style={styles.headerRight}
+                    >
                         {user?.profile_picture ? (
                             <Avatar.Image
                                 size={50}
@@ -343,15 +350,15 @@ const styles = StyleSheet.create({
     },
     watermarkContainer: {
         position: 'absolute',
-        right: -60,
-        top: -20,
-        opacity: 0.6,
+        right: -40,
+        top: -40,
+        opacity: 0.2,
+        zIndex: 0,
     },
-    watermarkContainerSecondary: {
-        position: 'absolute',
-        left: -40,
-        bottom: 20,
-        opacity: 0.3,
+    watermarkLogo: {
+        width: 300,
+        height: 300,
+        transform: [{ rotate: '-15deg' }],
     },
     headerTop: {
         flexDirection: 'row',
@@ -573,5 +580,46 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#0369A1', // Darker blue text
         fontStyle: 'italic',
+    },
+    // New header layout styles
+    headerLeft: {
+        flex: 1,
+    },
+    headerCenter: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 8,
+    },
+    headerRight: {
+        alignItems: 'flex-end',
+    },
+    logoContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    logoBackground: {
+        width: 56,
+        height: 56,
+        borderRadius: 0,
+        backgroundColor: '#FFFFFF',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    logoImage: {
+        width: 48,
+        height: 48,
+    },
+    logoText: {
+        color: '#FFFFFF',
+        fontSize: 10,
+        fontWeight: '700',
+        marginTop: 2,
+        letterSpacing: 1,
+        textTransform: 'uppercase',
     },
 });
