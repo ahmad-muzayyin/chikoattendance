@@ -8,6 +8,7 @@ import attendanceRoutes from './routes/attendanceRoutes';
 import branchRoutes from './routes/branchRoutes';
 import adminRoutes from './routes/adminRoutes';
 import notificationRoutes from './routes/notificationRoutes';
+import shiftRoutes from './routes/shiftRoutes';
 import { connectDB } from './config/db';
 import { User, UserRole } from './models/User';
 
@@ -43,6 +44,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/branches', branchRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/shifts', shiftRoutes);
 
 // Test endpoint
 app.get('/api/ping', (req, res) => {

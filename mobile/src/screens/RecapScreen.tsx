@@ -22,6 +22,7 @@ const { width } = Dimensions.get('window');
 
 type Recap = {
     month: string;
+    monthCode: string; // Add monthCode
     onTime: number;
     late: number;
     off: number;
@@ -31,14 +32,19 @@ type Recap = {
 type MonthCardProps = {
     data: Recap;
     isFirst: boolean;
+    onPress: () => void;
 };
 
-const MonthCard = ({ data, isFirst }: MonthCardProps) => {
+const MonthCard = ({ data, isFirst, onPress }: MonthCardProps) => {
     const total = data.onTime + data.late + data.off + data.holiday || 1;
     const attendanceRate = ((data.onTime / total) * 100).toFixed(1);
 
     return (
-        <View style={[styles.monthCard, isFirst && styles.monthCardHighlight]}>
+        <TouchableOpacity
+            style={[styles.monthCard, isFirst && styles.monthCardHighlight]}
+            onPress={onPress}
+            activeOpacity={0.7}
+        >
             {isFirst && (
                 <View style={styles.currentBadge}>
                     <Text style={styles.currentBadgeText}>Bulan Ini</Text>
@@ -98,7 +104,7 @@ const MonthCard = ({ data, isFirst }: MonthCardProps) => {
                     icon="calendar-remove"
                 />
             </View>
-        </View>
+        </TouchableOpacity>
     );
 };
 
@@ -239,7 +245,12 @@ export default function RecapScreen() {
                     </View>
                 ) : (
                     data.map((item, index) => (
-                        <MonthCard key={item.month} data={item} isFirst={index === 0} />
+                        <MonthCard
+                            key={item.month}
+                            data={item}
+                            isFirst={index === 0}
+                            onPress={() => navigation.navigate('RecapDetail', { month: item.month, monthCode: item.monthCode } as any)}
+                        />
                     ))
                 )}
             </ScrollView>

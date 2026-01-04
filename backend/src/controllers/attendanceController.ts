@@ -373,6 +373,7 @@ export const getRecap = async (req: AuthRequest, res: Response) => {
 
             recapData.push({
                 month: `${monthNames[monthDate.getMonth()]} ${monthDate.getFullYear()}`,
+                monthCode: `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`,
                 onTime,
                 late,
                 off: 0, // You can add logic for off days
@@ -590,6 +591,64 @@ export const cancelPermit = async (req: AuthRequest, res: Response) => {
 
     } catch (error) {
         console.error('Cancel Permit Error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+// Get detailed attendance history for a specific month
+export const getMonthlyHistory = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        const { month } = req.query; // Format: YYYY-MM
+
+        if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+        if (!month || typeof month !== 'string') return res.status(400).json({ message: 'Month parameter needed (YYYY-MM)' });
+
+        const [year, monthNum] = month.split('-').map(Number);
+        const startOfMonth = new Date(year, monthNum - 1, 1);
+        const endOfMonth = new Date(year, monthNum, 0, 23, 59, 59);
+
+        const attendances = await Attendance.findAll({
+            where: {
+                userId,
+                timestamp: {
+                    [Op.between]: [startOfMonth, endOfMonth]
+                }
+            },
+            order: [['timestamp', 'ASC']]
+        });
+
+        // Group by Date
+        const grouped: any = {};
+
+        attendances.forEach(att => {
+            const dateStr = new Date(att.timestamp).toISOString().split('T')[0];
+            if (!grouped[dateStr]) {
+                grouped[dateStr] = {
+                    date: dateStr,
+                    checkIn: null,
+                    checkOut: null,
+                    events: []
+                };
+            }
+
+            // Simplified summary
+            if (att.type === AttendanceType.CHECK_IN) {
+                grouped[dateStr].checkIn = att;
+            } else if (att.type === AttendanceType.CHECK_OUT) {
+                grouped[dateStr].checkOut = att;
+            }
+
+            // Keep all raw events just in case
+            grouped[dateStr].events.push(att);
+        });
+
+        // Convert object to array sorted by date descending
+        const history = Object.values(grouped).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        res.json(history);
+
+    } catch (error) {
+        console.error('Get Monthly History Error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };

@@ -4,6 +4,7 @@ import { User } from '../models/User';
 import { Attendance } from '../models/Attendance';
 import { Punishment } from '../models/Punishment';
 import { Branch } from '../models/Branch';
+import { Shift } from '../models/Shift';
 import { Op } from 'sequelize';
 import bcrypt from 'bcrypt';
 
@@ -38,8 +39,11 @@ export const getEmployees = async (req: Request, res: Response) => {
 
         const users = await User.findAll({
             where: whereClause,
-            attributes: ['id', 'name', 'email', 'role', 'branchId', 'profile_picture', 'position'],
-            include: [{ model: Branch, attributes: ['id', 'name'] }],
+            attributes: ['id', 'name', 'email', 'role', 'branchId', 'shiftId', 'profile_picture', 'position'],
+            include: [
+                { model: Branch, attributes: ['id', 'name'] },
+                { model: Shift, attributes: ['id', 'name', 'startHour', 'endHour'] }
+            ],
             order: [['role', 'ASC'], ['name', 'ASC']]
         });
 
@@ -218,7 +222,7 @@ export const addPunishment = async (req: Request, res: Response) => {
 
 export const createUser = async (req: Request, res: Response) => {
     try {
-        const { name, email, password, role, branchId, position } = req.body;
+        const { name, email, password, role, branchId, shiftId, position } = req.body;
         const exists = await User.findOne({ where: { email } });
         if (exists) return res.status(400).json({ message: 'Email sudah terdaftar' });
 
@@ -240,7 +244,7 @@ export const createUser = async (req: Request, res: Response) => {
         }
 
         const newUser = await User.create({
-            name, email, passwordHash, role, branchId: finalBranchId, position
+            name, email, passwordHash, role, branchId: finalBranchId, shiftId: shiftId || null, position
         });
 
         res.status(201).json({ message: 'User berhasil dibuat', user: newUser });
@@ -253,7 +257,7 @@ export const createUser = async (req: Request, res: Response) => {
 export const updateUser = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { name, email, password, role, position } = req.body;
+        const { name, email, password, role, position, shiftId } = req.body;
         let branchId = req.body.branchId;
 
         const user = await User.findByPk(id);
@@ -299,7 +303,7 @@ export const updateUser = async (req: Request, res: Response) => {
             console.log('✅ Forced branchId to:', branchId);
         }
 
-        let updateData: any = { name, email, role, branchId, position };
+        let updateData: any = { name, email, role, branchId, shiftId: shiftId || null, position };
         if (password) {
             updateData.passwordHash = await bcrypt.hash(password, 10);
         }

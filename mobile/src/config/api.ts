@@ -9,7 +9,8 @@ export const API_CONFIG = {
     // PENTING: Ganti sesuai environment Anda
     // Emulator Android: Gunakan 10.0.2.2
     // HP Fisik (scan QR): Gunakan IPv4 Laptop (cek 'ipconfig', misal: 192.168.1.x)
-    BASE_URL: 'http://34.50.89.217/api',
+    // BASE_URL: 'http://34.50.89.217/api',
+    BASE_URL: 'http://192.168.1.2:3000/api',
     TIMEOUT: 15000,
 };
 
@@ -20,6 +21,7 @@ export const ENDPOINTS = {
     CHECK_OUT: '/attendance/checkout',
     CALENDAR: '/attendance/calendar',
     RECAP: '/attendance/recap',
+    HISTORY: '/attendance/history',
     POINTS: '/attendance/points',
     SETTINGS: '/admin/settings',
 };

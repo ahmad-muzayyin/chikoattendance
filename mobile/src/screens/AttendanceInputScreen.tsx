@@ -50,6 +50,19 @@ export default function AttendanceInputScreen() {
         try {
             setStatusMessage('Melacak lokasi...');
             const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+
+            // Anti-Fake GPS Check
+            if (loc.mocked) {
+                setResultModal({
+                    visible: true,
+                    type: 'error',
+                    message: 'Terdeteksi Lokasi Palsu (Fake GPS). Mohon matikan aplikasi Fake GPS Anda untuk melakukan absensi.'
+                });
+                setStatusMessage('Terdeteksi Fake GPS 🚫');
+                setLocation(null);
+                return;
+            }
+
             setLocation(loc);
             setStatusMessage('Lokasi terkunci.');
         } catch (e) {

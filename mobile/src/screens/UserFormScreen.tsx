@@ -52,7 +52,12 @@ export default function UserFormScreen() {
 
     const [branchId, setBranchId] = useState(initialBranchId);
 
-    const [branches, setBranches] = useState([]);
+    // Shift Logic
+    const [shiftId, setShiftId] = useState(editingUser?.shiftId?.toString() || editingUser?.Shift?.id?.toString() || '');
+    const [shifts, setShifts] = useState<any[]>([]);
+    const [showShiftDialog, setShowShiftDialog] = useState(false);
+
+    const [branches, setBranches] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [showBranchDialog, setShowBranchDialog] = useState(false);
     const [showSuccessDialog, setShowSuccessDialog] = useState(false);
@@ -69,6 +74,7 @@ export default function UserFormScreen() {
     useEffect(() => {
         // Fetch branches for display purposes (even for HEAD)
         fetchBranches();
+        fetchShifts();
         // HEAD users can only assign to their own branch
         if (isHead && !editingUser) {
             setBranchId(currentUser?.branchId?.toString() || '');
@@ -80,6 +86,9 @@ export default function UserFormScreen() {
         ? 'Cabang Saya' // Or fetch real name if needed, but 'Cabang Saya' is clear enough
         : (branches.find((b: any) => b.id.toString() === branchId)?.name || 'Toko Pusat / Semua');
 
+    // Get selected shift name
+    const selectedShiftName = shifts.find((s: any) => s.id.toString() === shiftId)?.name || 'Default (Ikut Jam Toko)';
+
     const fetchBranches = async () => {
         try {
             const token = await SecureStore.getItemAsync('authToken');
@@ -87,6 +96,16 @@ export default function UserFormScreen() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setBranches(res.data);
+        } catch (e) { }
+    };
+
+    const fetchShifts = async () => {
+        try {
+            const token = await SecureStore.getItemAsync('authToken');
+            const res = await axios.get(`${API_CONFIG.BASE_URL}/shifts`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setShifts(res.data);
         } catch (e) { }
     };
 
@@ -123,6 +142,7 @@ export default function UserFormScreen() {
                 password: password || undefined,
                 role,
                 branchId: finalBranchId,
+                shiftId: shiftId ? parseInt(shiftId) : null,
                 position: role === 'EMPLOYEE' ? position : null
             };
 
@@ -253,6 +273,21 @@ export default function UserFormScreen() {
                             </View>
                             <Button mode="contained-tonal" onPress={() => setShowPositionDialog(true)}>
                                 Pilih
+                            </Button>
+                        </Surface>
+                    </>
+                )}
+
+                {role === 'EMPLOYEE' && (
+                    <>
+                        <Text style={styles.label}>Jadwal Shift</Text>
+                        <Surface style={styles.branchSelectCard} elevation={0}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.branchSelectLabel}>Pilih Shift</Text>
+                                <Text style={styles.branchSelectValue}>{selectedShiftName}</Text>
+                            </View>
+                            <Button mode="contained-tonal" onPress={() => setShowShiftDialog(true)}>
+                                Ubah
                             </Button>
                         </Surface>
                     </>
@@ -439,6 +474,59 @@ export default function UserFormScreen() {
                                 labelStyle={styles.modalConfirmButtonLabel}
                             >
                                 Selesai
+                            </Button>
+                        </View>
+                    </Surface>
+                </Modal>
+            </Portal>
+
+            {/* Shift Selection Modal */}
+            <Portal>
+                <Modal
+                    visible={showShiftDialog}
+                    onDismiss={() => setShowShiftDialog(false)}
+                    contentContainerStyle={styles.modalContainer}
+                >
+                    <Surface style={styles.modalSurface} elevation={5}>
+                        <View style={styles.modalHeader}>
+                            <View style={styles.modalIconContainer}>
+                                <MaterialCommunityIcons name="clock-outline" size={28} color={colors.primary} />
+                            </View>
+                            <Text style={styles.modalTitle}>Pilih Shift</Text>
+                            <Text style={styles.modalSubtitle}>Karyawan ini masuk shift apa?</Text>
+                        </View>
+
+                        <View style={styles.modalContent}>
+                            <ScrollView style={styles.radioScrollView} showsVerticalScrollIndicator={false}>
+                                <CustomRadioButton
+                                    options={[
+                                        { label: 'Default (Ikut Jam Toko)', value: '', icon: 'store' },
+                                        ...shifts.map((s: any) => ({
+                                            label: s.name,
+                                            value: s.id.toString(),
+                                            icon: 'clock-time-four',
+                                            description: `${s.startHour} - ${s.endHour}`
+                                        }))
+                                    ]}
+                                    value={shiftId}
+                                    onSelect={(value) => {
+                                        setShiftId(value);
+                                        setTimeout(() => {
+                                            setShowShiftDialog(false);
+                                        }, 200);
+                                    }}
+                                />
+                            </ScrollView>
+                        </View>
+
+                        <View style={styles.modalActions}>
+                            <Button
+                                mode="outlined"
+                                onPress={() => setShowShiftDialog(false)}
+                                style={styles.modalCancelButton}
+                                labelStyle={styles.modalCancelButtonLabel}
+                            >
+                                Batal
                             </Button>
                         </View>
                     </Surface>
