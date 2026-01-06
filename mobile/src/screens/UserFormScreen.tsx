@@ -373,18 +373,25 @@ export default function UserFormScreen() {
                             {/* CustomRadioButton */}
                             <ScrollView style={styles.radioScrollView} showsVerticalScrollIndicator={false}>
                                 <CustomRadioButton
-                                    options={COMMON_POSITIONS.map(pos => ({
-                                        label: pos,
-                                        value: pos,
-                                        icon: getPositionIcon(pos),
-                                    }))}
-                                    value={position}
+                                    options={[
+                                        ...COMMON_POSITIONS.map(pos => ({
+                                            label: pos,
+                                            value: pos,
+                                            icon: getPositionIcon(pos),
+                                        })),
+                                        { label: 'Lainnya / Custom', value: 'OTHER', icon: 'pencil-plus', description: 'Ketik posisi baru manual' }
+                                    ]}
+                                    value={COMMON_POSITIONS.includes(position) ? position : 'OTHER'}
                                     onSelect={(value) => {
-                                        setPosition(value);
-                                        // Smooth close with animation
-                                        setTimeout(() => {
-                                            setShowPositionDialog(false);
-                                        }, 200);
+                                        if (value === 'OTHER') {
+                                            setPosition(''); // Clear to show input
+                                            // Don't close dialog, let them type
+                                        } else {
+                                            setPosition(value);
+                                            setTimeout(() => {
+                                                setShowPositionDialog(false);
+                                            }, 200);
+                                        }
                                     }}
                                 />
                             </ScrollView>

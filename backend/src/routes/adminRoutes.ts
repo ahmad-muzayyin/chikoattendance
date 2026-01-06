@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { authenticateToken, requireRole } from '../middleware/authMiddleware';
 import { getEmployees, getDailyMonitoring, getEmployeeAttendance, addPunishment, createUser, updateUser, deleteUser } from '../controllers/adminController';
 import { getSettings, updateSettings } from '../controllers/settingsController';
+import { triggerBackup, getBackups, downloadBackup, deleteBackup } from '../controllers/backupController';
 
 const router = Router();
 
@@ -23,5 +24,11 @@ router.put('/settings', updateSettings);
 router.post('/users', createUser);
 router.put('/users/:id', updateUser);
 router.delete('/users/:id', deleteUser);
+
+// Backups (OWNER only)
+router.get('/backups', requireRole(['OWNER']), getBackups);
+router.post('/backups', requireRole(['OWNER']), triggerBackup);
+router.get('/backups/download/:fileName', requireRole(['OWNER']), downloadBackup);
+router.delete('/backups/:fileName', requireRole(['OWNER']), deleteBackup);
 
 export default router;

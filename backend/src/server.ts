@@ -11,6 +11,7 @@ import notificationRoutes from './routes/notificationRoutes';
 import shiftRoutes from './routes/shiftRoutes';
 import { connectDB } from './config/db';
 import { User, UserRole } from './models/User';
+import { initAutoBackup } from './utils/backup';
 
 dotenv.config();
 
@@ -75,6 +76,9 @@ const startServer = async () => {
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`Server running on port ${PORT}`);
         console.log(`Accessible from LAN at http://<YOUR_IP>:${PORT}`);
+
+        // Initialize Auto Backup
+        initAutoBackup();
     });
 };
 

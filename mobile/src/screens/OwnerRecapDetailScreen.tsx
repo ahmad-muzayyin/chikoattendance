@@ -6,7 +6,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { API_CONFIG } from '../config/api';
-import { colors, spacing, borderRadius } from '../theme/theme';
+import { colors, spacing, borderRadius, shadows } from '../theme/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const months = [
@@ -24,6 +24,9 @@ export default function OwnerRecapDetailScreen() {
     const [month, setMonth] = useState(new Date().getMonth() + 1); // 1-indexed
     const [year, setYear] = useState(new Date().getFullYear());
     const [showMonthPicker, setShowMonthPicker] = useState(false);
+    const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
+    const [tempMonth, setTempMonth] = useState(month);
+    const [tempYear, setTempYear] = useState(year);
 
     const fetchAttendance = async () => {
         setLoading(true);
@@ -46,19 +49,11 @@ export default function OwnerRecapDetailScreen() {
     };
 
     useEffect(() => {
-        navigation.setOptions({ title: `Rekap - ${userName}` });
+        navigation.setOptions({ title: userName });
         fetchAttendance();
     }, [month, year]);
 
-    // Calculate stats
-    const stats = {
-        total: attendances.length / 2, // approximation, better to count unique dates
-        hadir: new Set(attendances.filter(a => a.type === 'CHECK_IN' && !a.isLate).map(a => new Date(a.date).toDateString())).size,
-        telat: new Set(attendances.filter(a => a.type === 'CHECK_IN' && a.isLate).map(a => new Date(a.date).toDateString())).size,
-        // Calculate strictly from data
-    };
-
-    // Group by Date
+    // Grouping logic remains similar but I'll optimize
     const groupedData: any = {};
     attendances.forEach(att => {
         const dateKey = new Date(att.timestamp).toLocaleDateString('id-ID');
@@ -75,51 +70,78 @@ export default function OwnerRecapDetailScreen() {
 
     return (
         <View style={styles.container}>
-            {/* Filter Bar */}
-            <View style={styles.filterBar}>
-                <TouchableOpacity onPress={() => setShowMonthPicker(true)} style={styles.filterBtn}>
-                    <MaterialCommunityIcons name="calendar-month" size={20} color={colors.primary} />
-                    <Text style={styles.filterText}>{months[month - 1]} {year}</Text>
-                    <MaterialCommunityIcons name="chevron-down" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
-                <Button
-                    mode="contained"
-                    buttonColor={colors.success}
-                    icon="printer"
-                    onPress={() => console.log('Print/Export')} // Implement export later
-                    compact
+            {/* Modern Filter Header */}
+            <Surface style={styles.headerSurface} elevation={2}>
+                <TouchableOpacity
+                    onPress={() => {
+                        setTempMonth(month);
+                        setTempYear(year);
+                        setShowMonthPicker(true);
+                    }}
+                    style={styles.pickerTrigger}
                 >
-                    Export
-                </Button>
-            </View>
+                    <View style={styles.pickerIcon}>
+                        <MaterialCommunityIcons name="calendar-range" size={24} color={colors.primary} />
+                    </View>
+                    <View>
+                        <Text style={styles.pickerLabel}>Periode Rekap</Text>
+                        <Text style={styles.pickerValue}>{months[month - 1]} {year}</Text>
+                    </View>
+                    <MaterialCommunityIcons name="chevron-down" size={20} color={colors.textMuted} style={{ marginLeft: 'auto' }} />
+                </TouchableOpacity>
 
-            <ScrollView refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchAttendance} />}>
-                {items.length === 0 ? (
+                <TouchableOpacity style={styles.exportBtn} onPress={() => console.log('Export')}>
+                    <MaterialCommunityIcons name="file-download-outline" size={22} color="white" />
+                </TouchableOpacity>
+            </Surface>
+
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchAttendance} colors={[colors.primary]} />}
+            >
+                {loading && items.length === 0 ? (
+                    <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
+                ) : items.length === 0 ? (
                     <View style={styles.emptyState}>
-                        <Text style={styles.emptyText}>Tidak ada data absensi bulan ini</Text>
+                        <MaterialCommunityIcons name="calendar-blank-outline" size={80} color={`${colors.primary}20`} />
+                        <Text style={styles.emptyTitle}>Data Tidak Ditemukan</Text>
+                        <Text style={styles.emptySubtitle}>Tidak ada absensi untuk periode {months[month - 1]} {year}</Text>
                     </View>
                 ) : (
                     items.map((item: any, index) => (
                         <Surface key={index} style={styles.itemCard} elevation={1}>
-                            <View style={styles.dateBox}>
-                                <Text style={styles.dateDay}>{new Date(item.date).getDate()}</Text>
-                                <Text style={styles.dateMonth}>{months[new Date(item.date).getMonth()].substring(0, 3)}</Text>
-                            </View>
-                            <View style={styles.timeBox}>
-                                <View style={styles.timeRow}>
-                                    <MaterialCommunityIcons name="login" size={16} color={colors.success} />
-                                    <Text style={styles.timeLabel}>Masuk:</Text>
-                                    <Text style={styles.timeValue}>
-                                        {item.checkIn ? new Date(item.checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
-                                    </Text>
-                                    {item.isLate && <Text style={styles.lateBadge}>Telat</Text>}
+                            <View style={styles.cardHeader}>
+                                <View style={styles.dateBadge}>
+                                    <Text style={styles.dateDayText}>{new Date(item.date).getDate()}</Text>
+                                    <Text style={styles.dateMonthText}>{months[new Date(item.date).getMonth()].substring(0, 3)}</Text>
                                 </View>
-                                <View style={styles.timeRow}>
-                                    <MaterialCommunityIcons name="logout" size={16} color={colors.error} />
-                                    <Text style={styles.timeLabel}>Pulang:</Text>
-                                    <Text style={styles.timeValue}>
-                                        {item.checkOut ? new Date(item.checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                <View style={styles.cardInfo}>
+                                    <Text style={styles.dayText}>
+                                        {new Date(item.date).toLocaleDateString('id-ID', { weekday: 'long' })}
                                     </Text>
+                                    <Text style={styles.fullDateText}>
+                                        {new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                    </Text>
+                                </View>
+                                {item.isLate && <View style={styles.lateStatus}><Text style={styles.lateStatusText}>TERLAMBAT</Text></View>}
+                            </View>
+
+                            <View style={styles.cardDivider} />
+
+                            <View style={styles.timeRow}>
+                                <View style={[styles.timeSlot, { borderRightWidth: 1, borderRightColor: colors.divider }]}>
+                                    <MaterialCommunityIcons name="clock-in" size={18} color={colors.success} />
+                                    <View style={{ marginLeft: 10 }}>
+                                        <Text style={styles.slotLabel}>Masuk</Text>
+                                        <Text style={styles.slotValue}>{item.checkIn ? new Date(item.checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--'}</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.timeSlot}>
+                                    <MaterialCommunityIcons name="clock-out" size={18} color={colors.error} />
+                                    <View style={{ marginLeft: 10 }}>
+                                        <Text style={styles.slotLabel}>Pulang</Text>
+                                        <Text style={styles.slotValue}>{item.checkOut ? new Date(item.checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--'}</Text>
+                                    </View>
                                 </View>
                             </View>
                         </Surface>
@@ -127,37 +149,50 @@ export default function OwnerRecapDetailScreen() {
                 )}
             </ScrollView>
 
-            {/* Month Picker Dialog */}
+            {/* Modern Selection Modal */}
             <Portal>
-                <Dialog visible={showMonthPicker} onDismiss={() => setShowMonthPicker(false)}>
-                    <Dialog.Title>Pilih Bulan</Dialog.Title>
+                <Dialog visible={showMonthPicker} onDismiss={() => setShowMonthPicker(false)} style={styles.dialog}>
+                    <Dialog.Title style={styles.dialogTitle}>Pilih Periode</Dialog.Title>
                     <Dialog.Content>
-                        <ScrollView style={{ maxHeight: 300 }}>
+                        <Text style={styles.dialogLabel}>Tahun</Text>
+                        <View style={styles.yearGrid}>
+                            {years.map(y => (
+                                <TouchableOpacity
+                                    key={y}
+                                    style={[styles.yearItem, tempYear === y && styles.yearItemActive]}
+                                    onPress={() => setTempYear(y)}
+                                >
+                                    <Text style={[styles.yearText, tempYear === y && styles.yearTextActive]}>{y}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <Text style={[styles.dialogLabel, { marginTop: 20 }]}>Bulan</Text>
+                        <View style={styles.monthGrid}>
                             {months.map((m, i) => (
                                 <TouchableOpacity
                                     key={i}
-                                    style={styles.dialogItem}
-                                    onPress={() => {
-                                        setMonth(i + 1);
-                                        setShowMonthPicker(false);
-                                    }}
+                                    style={[styles.monthItem, tempMonth === i + 1 && styles.monthItemActive]}
+                                    onPress={() => setTempMonth(i + 1)}
                                 >
-                                    <RadioButton
-                                        value={(i + 1).toString()}
-                                        status={month === i + 1 ? 'checked' : 'unchecked'}
-                                        onPress={() => {
-                                            setMonth(i + 1);
-                                            setShowMonthPicker(false);
-                                        }}
-                                        color={colors.primary}
-                                    />
-                                    <Text style={styles.dialogItemText}>{m}</Text>
+                                    <Text style={[styles.monthText, tempMonth === i + 1 && styles.monthTextActive]}>{m.substring(0, 3)}</Text>
                                 </TouchableOpacity>
                             ))}
-                        </ScrollView>
+                        </View>
                     </Dialog.Content>
-                    <Dialog.Actions>
-                        <Button onPress={() => setShowMonthPicker(false)}>Batal</Button>
+                    <Dialog.Actions style={styles.dialogActions}>
+                        <Button onPress={() => setShowMonthPicker(false)} textColor={colors.textMuted}>Batal</Button>
+                        <Button
+                            mode="contained"
+                            onPress={() => {
+                                setMonth(tempMonth);
+                                setYear(tempYear);
+                                setShowMonthPicker(false);
+                            }}
+                            style={styles.applyBtn}
+                        >
+                            Terapkan
+                        </Button>
                     </Dialog.Actions>
                 </Dialog>
             </Portal>
@@ -170,100 +205,229 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: colors.background,
     },
-    filterBar: {
+    headerSurface: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
         padding: spacing.md,
-        backgroundColor: colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.divider,
+        backgroundColor: 'white',
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        marginHorizontal: 2,
     },
-    filterBtn: {
+    pickerTrigger: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 8,
-        borderWidth: 1,
-        borderColor: colors.divider,
-        borderRadius: borderRadius.md,
     },
-    filterText: {
-        marginHorizontal: 8,
-        fontSize: 14,
-        fontWeight: '600',
+    pickerIcon: {
+        width: 45,
+        height: 45,
+        borderRadius: 14,
+        backgroundColor: `${colors.primary}10`,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    pickerLabel: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: colors.textMuted,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+    },
+    pickerValue: {
+        fontSize: 16,
+        fontWeight: 'bold',
         color: colors.textPrimary,
     },
-    itemCard: {
-        flexDirection: 'row',
-        marginHorizontal: spacing.md,
-        marginTop: spacing.sm,
+    exportBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 12,
+        ...shadows.sm,
+    },
+    scrollContent: {
         padding: spacing.md,
-        borderRadius: borderRadius.lg,
-        backgroundColor: colors.surface,
-        alignItems: 'center',
+        paddingBottom: spacing.xxl,
     },
-    dateBox: {
-        alignItems: 'center',
-        paddingRight: spacing.md,
-        borderRightWidth: 1,
-        borderRightColor: colors.divider,
-        marginRight: spacing.md,
-        minWidth: 50,
+    itemCard: {
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: spacing.md,
+        marginBottom: spacing.md,
+        overflow: 'hidden',
     },
-    dateDay: {
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    dateBadge: {
+        width: 50,
+        height: 50,
+        borderRadius: 15,
+        backgroundColor: `${colors.primary}10`,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 15,
+    },
+    dateDayText: {
         fontSize: 20,
         fontWeight: 'bold',
         color: colors.primary,
+        lineHeight: 22,
     },
-    dateMonth: {
-        fontSize: 12,
-        color: colors.textSecondary,
+    dateMonthText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: colors.primary,
         textTransform: 'uppercase',
     },
-    timeBox: {
+    cardInfo: {
         flex: 1,
+    },
+    dayText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: colors.textPrimary,
+        textTransform: 'capitalize',
+    },
+    fullDateText: {
+        fontSize: 12,
+        color: colors.textSecondary,
+    },
+    lateStatus: {
+        backgroundColor: '#FEE2E2',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    lateStatusText: {
+        fontSize: 9,
+        fontWeight: 'bold',
+        color: colors.error,
+    },
+    cardDivider: {
+        height: 1,
+        backgroundColor: colors.divider,
+        marginVertical: 12,
     },
     timeRow: {
         flexDirection: 'row',
+    },
+    timeSlot: {
+        flex: 1,
+        flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 4,
+        paddingVertical: 5,
+        paddingHorizontal: 5,
     },
-    timeLabel: {
-        fontSize: 12,
+    slotLabel: {
+        fontSize: 10,
+        color: colors.textMuted,
+        fontWeight: '600',
+    },
+    slotValue: {
+        fontSize: 15,
+        fontWeight: 'bold',
+        color: colors.textPrimary,
+    },
+    emptyState: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 60,
+        paddingHorizontal: 40,
+    },
+    emptyTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: colors.textPrimary,
+        marginTop: 20,
+    },
+    emptySubtitle: {
+        fontSize: 14,
         color: colors.textSecondary,
-        marginLeft: 6,
-        marginRight: 4,
-        width: 45,
+        textAlign: 'center',
+        marginTop: 8,
     },
-    timeValue: {
+    dialog: {
+        borderRadius: 25,
+        backgroundColor: 'white',
+    },
+    dialogTitle: {
+        textAlign: 'center',
+        fontSize: 20,
+        fontWeight: 'bold',
+    },
+    dialogLabel: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: colors.textSecondary,
+        marginBottom: 10,
+        marginLeft: 5,
+    },
+    yearGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+    },
+    yearItem: {
+        width: '31%',
+        paddingVertical: 8,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: colors.divider,
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    yearItemActive: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
+    },
+    yearText: {
         fontSize: 14,
         fontWeight: '600',
         color: colors.textPrimary,
     },
-    lateBadge: {
-        fontSize: 10,
-        color: colors.error,
-        backgroundColor: '#FEE2E2',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-        marginLeft: 8,
-        fontWeight: 'bold',
+    yearTextActive: {
+        color: 'white',
     },
-    emptyState: {
-        padding: spacing.xl,
-        alignItems: 'center',
-    },
-    emptyText: {
-        color: colors.textMuted,
-    },
-    dialogItem: {
+    monthGrid: {
         flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 8,
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
     },
-    dialogItemText: {
-        fontSize: 16,
-        marginLeft: 8,
+    monthItem: {
+        width: '23%',
+        paddingVertical: 10,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: colors.divider,
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    monthItemActive: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
+    },
+    monthText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: colors.textPrimary,
+    },
+    monthTextActive: {
+        color: 'white',
+    },
+    dialogActions: {
+        paddingHorizontal: 20,
+        paddingBottom: 20,
+    },
+    applyBtn: {
+        borderRadius: 12,
+        paddingHorizontal: 20,
     }
 });

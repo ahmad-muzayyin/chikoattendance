@@ -1,12 +1,12 @@
-// d:\AHMAD MUZAYYIN\ChikoAttendance\mobile\src\screens\AttendanceInputScreen.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, Image, ScrollView, Dimensions, TouchableOpacity } from 'react-native';
-import { Text, Button, TextInput, Card, Portal, Modal, IconButton, Surface, ActivityIndicator } from 'react-native-paper';
+import { View, StyleSheet, Image, ScrollView, Dimensions, TouchableOpacity, Alert } from 'react-native';
+import { Text, Button, TextInput, Card, Portal, Modal, IconButton, Surface, ActivityIndicator, useTheme } from 'react-native-paper';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { API_CONFIG, ENDPOINTS } from '../config/api';
 import { colors, spacing, borderRadius, shadows } from '../theme/theme';
 import { useAuth } from '../hooks/useAuth';
@@ -18,6 +18,7 @@ export default function AttendanceInputScreen() {
     const navigation = useNavigation();
     const isFocused = useIsFocused();
     const { user } = useAuth();
+    const theme = useTheme();
 
     const [permission, requestPermission] = useCameraPermissions();
     const [cameraRef, setCameraRef] = useState<CameraView | null>(null);
@@ -64,7 +65,7 @@ export default function AttendanceInputScreen() {
             }
 
             setLocation(loc);
-            setStatusMessage('Lokasi terkunci.');
+            setStatusMessage('Lokasi terkunci akurat.');
         } catch (e) {
             setStatusMessage('GPS Error. Coba lagi.');
         }
@@ -145,149 +146,195 @@ export default function AttendanceInputScreen() {
             <View style={styles.center}>
                 <MaterialCommunityIcons name="camera-off" size={60} color={colors.textMuted} />
                 <Text style={{ marginVertical: 20 }}>Izin kamera diperlukan untuk absensi.</Text>
-                <Button mode="contained" onPress={requestPermission}>Berikan Izin</Button>
+                <Button mode="contained" onPress={requestPermission} style={styles.button}>Berikan Izin</Button>
             </View>
         );
     }
 
     return (
         <View style={styles.container}>
-            <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-                {/* Branch Info Header */}
-                <Surface style={styles.headerBrand} elevation={2}>
-                    <View style={styles.headerInfo}>
-                        <MaterialCommunityIcons name="store-marker" size={24} color="#FFF" />
-                        <View style={{ marginLeft: 12 }}>
-                            <Text style={styles.headerTitle}>Absensi Outlet</Text>
-                            <Text style={styles.headerSubtitle}>{user?.branch?.name || 'Toko Pusat'}</Text>
-                        </View>
-                    </View>
-                </Surface>
+            {/* Curved Gradient Header */}
+            <View style={styles.headerContainer}>
+                <LinearGradient
+                    colors={['#DC2626', '#EF4444', '#F87171']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.header}
+                >
+                    {/* Decorative Circles */}
+                    <View style={styles.decorativeCircle1} />
+                    <View style={styles.decorativeCircle2} />
 
+                    <View style={styles.headerContent}>
+                        <MaterialCommunityIcons name="store-marker" size={28} color="rgba(255,255,255,0.9)" />
+                        <Text style={styles.headerTitle}>Absensi Outlet</Text>
+                        <Text style={styles.headerSubtitle}>{user?.branch?.name || 'Toko Pusat'}</Text>
+                    </View>
+                </LinearGradient>
+                <View style={styles.curvedBottom} />
+            </View>
+
+            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
                 {/* Camera View */}
-                <View style={styles.cameraWrapper}>
-                    {photo ? (
-                        <View style={styles.photoPreview}>
-                            <Image source={{ uri: photo }} style={styles.photo} />
-                            <TouchableOpacity style={styles.retakeIcon} onPress={() => setPhoto(null)}>
-                                <MaterialCommunityIcons name="close-circle" size={40} color={colors.error} />
+                <View style={styles.cameraCard}>
+                    <View style={styles.cameraHeader}>
+                        <Text style={styles.sectionTitle}>Foto Selfie</Text>
+                        {photo && (
+                            <TouchableOpacity onPress={() => setPhoto(null)}>
+                                <Text style={styles.retakeText}>Ambil Ulang</Text>
                             </TouchableOpacity>
-                        </View>
-                    ) : (
-                        isFocused && (
-                            <CameraView style={styles.camera} facing={facing} ref={setCameraRef}>
-                                <View style={styles.cameraOverlay}>
-                                    <IconButton
-                                        icon="camera-flip"
-                                        iconColor="#FFF"
-                                        containerColor="rgba(0,0,0,0.4)"
-                                        onPress={() => setFacing(f => f === 'front' ? 'back' : 'front')}
-                                    />
-                                </View>
-                            </CameraView>
-                        )
+                        )}
+                    </View>
+
+                    <View style={styles.cameraWrapper}>
+                        {photo ? (
+                            <Image source={{ uri: photo }} style={styles.photo} />
+                        ) : (
+                            isFocused && (
+                                <CameraView style={styles.camera} facing={facing} ref={setCameraRef}>
+                                    <View style={styles.cameraControls}>
+                                        <IconButton
+                                            icon="camera-flip"
+                                            iconColor="#FFF"
+                                            containerColor="rgba(0,0,0,0.4)"
+                                            size={20}
+                                            onPress={() => setFacing(f => f === 'front' ? 'back' : 'front')}
+                                        />
+                                    </View>
+                                </CameraView>
+                            )
+                        )}
+                    </View>
+
+                    {!photo && !loading && (
+                        <TouchableOpacity style={styles.captureButton} onPress={takePicture}>
+                            <MaterialCommunityIcons name="camera" size={24} color="white" />
+                            <Text style={styles.captureText}>Ambil Foto</Text>
+                        </TouchableOpacity>
                     )}
                 </View>
 
-                {/* Main Form */}
-                <View style={styles.form}>
-                    {!photo && !loading && (
-                        <Button
-                            mode="contained"
-                            icon="camera"
-                            onPress={takePicture}
-                            style={styles.snapButton}
-                            contentStyle={{ height: 55 }}
-                        >
-                            Ambil Selfie Sekarang
-                        </Button>
-                    )}
+                {/* Location Status */}
+                <View style={styles.locationCard}>
+                    <View style={[styles.locationIndicator, { backgroundColor: location ? '#DCFCE7' : '#FEF2F2' }]}>
+                        <MaterialCommunityIcons
+                            name={location ? "map-marker-check" : "map-marker-off"}
+                            size={20}
+                            color={location ? "#16A34A" : "#DC2626"}
+                        />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.locationTitle}>Status Lokasi</Text>
+                        <Text style={[styles.locationStatus, { color: location ? '#16A34A' : '#DC2626' }]}>
+                            {statusMessage}
+                        </Text>
+                    </View>
+                    <IconButton
+                        icon="refresh"
+                        size={20}
+                        iconColor="#6B7280"
+                        onPress={getLocation}
+                        disabled={loading}
+                        style={{ margin: 0 }}
+                    />
+                </View>
 
-                    <Card style={styles.geoCard}>
-                        <View style={styles.row}>
-                            <View style={[styles.dot, { backgroundColor: location ? colors.success : colors.warning }]} />
-                            <Text style={styles.geoTitle}>{statusMessage}</Text>
-                            <IconButton icon="refresh" size={20} onPress={getLocation} disabled={loading} />
-                        </View>
-                    </Card>
-
+                {/* Notes Input */}
+                <View style={styles.formCard}>
+                    <Text style={styles.fieldLabel}>Catatan (Opsional)</Text>
                     <TextInput
-                        label="Catatan atau Keterangan"
+                        placeholder="Tambahkan keterangan jika perlu..."
                         value={notes}
                         onChangeText={setNotes}
-                        mode="outlined"
+                        mode="flat"
                         multiline
                         numberOfLines={3}
-                        style={styles.notesInput}
+                        style={styles.input}
+                        underlineColor="transparent"
+                        activeUnderlineColor="#DC2626"
+                        theme={{ roundness: 12, colors: { background: '#F9FAFB' } }}
                     />
-
-                    <View style={styles.actionGrid}>
-                        <TouchableOpacity
-                            style={[styles.actionBtn, styles.checkInBtn, (loading || !location) && styles.disabledBtn]}
-                            onPress={() => handleSubmit('CHECK_IN')}
-                            disabled={loading || !location}
-                        >
-                            <MaterialCommunityIcons name="login-variant" size={28} color="#FFF" />
-                            <Text style={styles.btnLabel}>MASUK</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.actionBtn, styles.checkOutBtn, (loading || !location) && styles.disabledBtn]}
-                            onPress={() => handleSubmit('CHECK_OUT')}
-                            disabled={loading || !location}
-                        >
-                            <MaterialCommunityIcons name="logout-variant" size={28} color={colors.error} />
-                            <Text style={[styles.btnLabel, { color: colors.error }]}>PULANG</Text>
-                        </TouchableOpacity>
-                    </View>
                 </View>
+
+                {/* Action Buttons */}
+                <View style={styles.actionContainer}>
+                    <TouchableOpacity
+                        style={[styles.actionBtn, styles.checkInBtn, (loading || !location) && styles.disabledBtn]}
+                        onPress={() => handleSubmit('CHECK_IN')}
+                        disabled={loading || !location}
+                        activeOpacity={0.8}
+                    >
+                        <View style={styles.btnIconBg}>
+                            <MaterialCommunityIcons name="login" size={24} color="#DC2626" />
+                        </View>
+                        <View>
+                            <Text style={styles.btnTitle}>MASUK</Text>
+                            <Text style={styles.btnSub}>Mulai Shift</Text>
+                        </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.actionBtn, styles.checkOutBtn, (loading || !location) && styles.disabledBtn]}
+                        onPress={() => handleSubmit('CHECK_OUT')}
+                        disabled={loading || !location}
+                        activeOpacity={0.8}
+                    >
+                        <View style={[styles.btnIconBg, { backgroundColor: '#F3F4F6' }]}>
+                            <MaterialCommunityIcons name="logout" size={24} color="#4B5563" />
+                        </View>
+                        <View>
+                            <Text style={[styles.btnTitle, { color: '#374151' }]}>PULANG</Text>
+                            <Text style={styles.btnSub}>Akhiri Shift</Text>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
+                <View style={{ height: 40 }} />
             </ScrollView>
 
-            {/* Premium Result Modal */}
+            {/* Result Modal */}
             <Portal>
                 <Modal
                     visible={resultModal.visible}
                     onDismiss={() => resultModal.type !== 'success' && setResultModal({ ...resultModal, visible: false })}
-                    contentContainerStyle={styles.resultModal}
+                    contentContainerStyle={styles.modalContainer}
                 >
-                    <View style={styles.modalBody}>
-                        <View style={[styles.modalIcon, { backgroundColor: resultModal.type === 'success' ? '#DCFCE7' : '#FEE2E2' }]}>
+                    <View style={styles.modalContent}>
+                        <View style={[styles.modalIconCircle, { backgroundColor: resultModal.type === 'success' ? '#DCFCE7' : '#FEF2F2' }]}>
                             <MaterialCommunityIcons
-                                name={resultModal.type === 'success' ? 'check-decagram' : 'alert-circle'}
-                                size={50}
+                                name={resultModal.type === 'success' ? 'check' : 'alert-outline'}
+                                size={40}
                                 color={resultModal.type === 'success' ? '#16A34A' : '#DC2626'}
                             />
                         </View>
 
-                        <Text style={styles.modalTitle}>{resultModal.message}</Text>
+                        <Text style={styles.modalTitle}>{resultModal.type === 'success' ? 'Berhasil!' : 'Oops!'}</Text>
+                        <Text style={styles.modalMessage}>{resultModal.message}</Text>
 
                         {resultModal.type === 'range' && resultModal.data && (
-                            <View style={styles.rangeDetails}>
-                                <Text style={styles.rangeText}>Jarak Anda: <Text style={{ fontWeight: 'bold' }}>{resultModal.data.distance}m</Text></Text>
-                                <Text style={styles.rangeText}>Batas Max: {resultModal.data.max}m</Text>
+                            <View style={styles.rangeInfo}>
+                                <Text style={styles.rangeText}>Jarak: {resultModal.data.distance}m</Text>
+                                <Text style={styles.rangeText}>Maks: {resultModal.data.max}m</Text>
                             </View>
                         )}
 
-                        <Text style={styles.modalSub}>{
-                            resultModal.type === 'success'
-                                ? 'Laporan absensi Anda telah tercatat di sistem.'
-                                : 'Terjadi kendala saat memproses data. Silakan coba lagi.'
-                        }</Text>
-
                         <Button
                             mode="contained"
-                            style={styles.closeBtn}
                             onPress={() => {
                                 setResultModal({ ...resultModal, visible: false });
                                 if (resultModal.type === 'success') {
-                                    // Reset camera and form for next attendance
                                     setPhoto(null);
                                     setNotes('');
                                     navigation.goBack();
                                 }
                             }}
+                            style={[
+                                styles.modalButton,
+                                { backgroundColor: resultModal.type === 'success' ? '#16A34A' : '#DC2626' }
+                            ]}
+                            labelStyle={{ fontWeight: 'bold' }}
                         >
-                            {resultModal.type === 'success' ? 'Selesai' : 'Tutup'}
+                            {resultModal.type === 'success' ? 'SELESAI' : 'MENGERTI'}
                         </Button>
                     </View>
                 </Modal>
@@ -295,8 +342,8 @@ export default function AttendanceInputScreen() {
 
             {loading && (
                 <View style={styles.loadingOverlay}>
-                    <ActivityIndicator size="large" color="#FFF" />
-                    <Text style={{ color: '#FFF', marginTop: 10 }}>Mengirim Data...</Text>
+                    <ActivityIndicator size="large" color="white" />
+                    <Text style={styles.loadingText}>Mengirim Data...</Text>
                 </View>
             )}
         </View>
@@ -304,57 +351,311 @@ export default function AttendanceInputScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
-    center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 30 },
-    headerBrand: {
-        backgroundColor: colors.primary,
-        padding: spacing.xl,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30
+    container: {
+        flex: 1,
+        backgroundColor: '#F8FAFC',
     },
-    headerInfo: { flexDirection: 'row', alignItems: 'center' },
-    headerTitle: { color: 'rgba(255,255,255,0.7)', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1 },
-    headerSubtitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
-    cameraWrapper: {
-        height: 350,
-        margin: spacing.lg,
-        borderRadius: 20,
+    center: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+
+    // Header Styles matched with Settings
+    headerContainer: {
+        position: 'relative',
+        marginBottom: -20,
+        zIndex: 1,
+    },
+    header: {
+        height: 180,
+        paddingTop: 50,
+        paddingHorizontal: 24,
+        position: 'relative',
         overflow: 'hidden',
-        backgroundColor: '#000',
-        ...shadows.md
     },
-    camera: { flex: 1 },
-    cameraOverlay: { padding: 10, alignItems: 'flex-end' },
-    photoPreview: { flex: 1 },
-    photo: { flex: 1, resizeMode: 'cover' },
-    retakeIcon: { position: 'absolute', top: 10, right: 10 },
-    form: { paddingHorizontal: spacing.xl },
-    snapButton: { marginBottom: spacing.lg, borderRadius: borderRadius.md },
-    geoCard: { padding: 12, borderRadius: 15, backgroundColor: colors.surface, marginBottom: spacing.md },
-    row: { flexDirection: 'row', alignItems: 'center' },
-    dot: { width: 8, height: 8, borderRadius: 4, marginRight: 10 },
-    geoTitle: { flex: 1, fontSize: 13, color: colors.textSecondary },
-    notesInput: { backgroundColor: colors.surface, marginBottom: spacing.xl },
-    actionGrid: { flexDirection: 'row', justifyContent: 'space-between' },
-    actionBtn: {
-        width: '48%',
-        height: 100,
+    decorativeCircle1: {
+        position: 'absolute',
+        width: 200,
+        height: 200,
+        borderRadius: 100,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        top: -80,
+        right: -40,
+    },
+    decorativeCircle2: {
+        position: 'absolute',
+        width: 140,
+        height: 140,
+        borderRadius: 70,
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        bottom: 20,
+        left: -20,
+    },
+    headerContent: {
+        alignItems: 'center',
+        marginTop: 10,
+    },
+    headerTitle: {
+        color: 'white',
+        fontSize: 24,
+        fontWeight: 'bold',
+        marginTop: 8,
+    },
+    headerSubtitle: {
+        color: 'rgba(255,255,255,0.9)',
+        fontSize: 14,
+        fontWeight: '500',
+        marginTop: 2,
+    },
+    curvedBottom: {
+        height: 24,
+        backgroundColor: '#F8FAFC',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        marginTop: -24,
+    },
+
+    content: {
+        paddingHorizontal: 20,
+        paddingTop: 10,
+        paddingBottom: 40,
+    },
+
+    // Camera Card
+    cameraCard: {
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: 16,
+        marginBottom: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    cameraHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#1F2937',
+    },
+    retakeText: {
+        fontSize: 13,
+        color: '#DC2626',
+        fontWeight: '600',
+    },
+    cameraWrapper: {
+        height: 320,
+        borderRadius: 16,
+        overflow: 'hidden',
+        backgroundColor: '#F3F4F6',
+        position: 'relative',
+    },
+    camera: {
+        flex: 1,
+    },
+    photo: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+    },
+    cameraControls: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
+    },
+    captureButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#DC2626',
+        marginTop: 12,
+        paddingVertical: 12,
+        borderRadius: 12,
+        gap: 8,
+    },
+    captureText: {
+        color: 'white',
+        fontWeight: '600',
+        fontSize: 15,
+    },
+
+    // Location Card
+    locationCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'white',
+        padding: 12,
+        borderRadius: 16,
+        marginBottom: 16,
+        gap: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 1,
+    },
+    locationIndicator: {
+        width: 40,
+        height: 40,
         borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
-        ...shadows.sm
     },
-    checkInBtn: { backgroundColor: colors.primary },
-    checkOutBtn: { backgroundColor: '#FFF', borderWidth: 1, borderColor: colors.error },
-    btnLabel: { color: '#FFF', fontWeight: 'bold', marginTop: 8, fontSize: 14 },
-    disabledBtn: { opacity: 0.5 },
-    resultModal: { backgroundColor: 'white', margin: 30, borderRadius: 30, padding: 0, overflow: 'hidden' },
-    modalBody: { padding: 30, alignItems: 'center' },
-    modalIcon: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-    modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
-    modalSub: { textAlign: 'center', color: colors.textSecondary, marginBottom: 25, lineHeight: 20 },
-    rangeDetails: { backgroundColor: colors.background, padding: 10, borderRadius: 10, marginBottom: 15, width: '100%', alignItems: 'center' },
-    rangeText: { fontSize: 13, color: colors.error },
-    closeBtn: { width: '100%', borderRadius: 12 },
-    loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 99 }
+    locationTitle: {
+        fontSize: 12,
+        color: '#6B7280',
+        fontWeight: '500',
+    },
+    locationStatus: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+
+    // Notes Form
+    formCard: {
+        marginBottom: 20,
+    },
+    fieldLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#374151',
+        marginBottom: 8,
+        marginLeft: 4,
+    },
+    input: {
+        backgroundColor: '#F9FAFB',
+        fontSize: 14,
+    },
+
+    // Action Buttons
+    actionContainer: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    actionBtn: {
+        flex: 1,
+        borderRadius: 16,
+        padding: 16,
+        justifyContent: 'space-between',
+        height: 110,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    checkInBtn: {
+        backgroundColor: 'white',
+        borderLeftWidth: 4,
+        borderLeftColor: '#DC2626',
+    },
+    checkOutBtn: {
+        backgroundColor: 'white',
+        borderLeftWidth: 4,
+        borderLeftColor: '#4B5563',
+    },
+    btnIconBg: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: '#FEF2F2',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 12,
+    },
+    btnTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#DC2626',
+        marginBottom: 2,
+    },
+    btnSub: {
+        fontSize: 12,
+        color: '#6B7280',
+    },
+    disabledBtn: {
+        opacity: 0.6,
+    },
+
+    // Modals
+    modalContainer: {
+        backgroundColor: 'white',
+        marginHorizontal: 32,
+        borderRadius: 24,
+        padding: 0,
+        overflow: 'hidden',
+    },
+    modalContent: {
+        padding: 24,
+        alignItems: 'center',
+    },
+    modalIconCircle: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#1F2937',
+        marginBottom: 8,
+    },
+    modalMessage: {
+        fontSize: 15,
+        color: '#4B5563',
+        textAlign: 'center',
+        marginBottom: 20,
+        lineHeight: 22,
+    },
+    rangeInfo: {
+        backgroundColor: '#F3F4F6',
+        padding: 12,
+        borderRadius: 12,
+        width: '100%',
+        marginBottom: 20,
+    },
+    rangeText: {
+        fontSize: 13,
+        color: '#4B5563',
+        textAlign: 'center',
+        marginBottom: 2,
+    },
+    modalButton: {
+        width: '100%',
+        borderRadius: 12,
+        paddingVertical: 2,
+    },
+    button: {
+        borderRadius: 12,
+    },
+
+    // Loading
+    loadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 99,
+    },
+    loadingText: {
+        color: 'white',
+        marginTop: 12,
+        fontSize: 16,
+        fontWeight: '600',
+    }
 });

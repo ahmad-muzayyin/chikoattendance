@@ -204,6 +204,14 @@ export default function ProfileScreen() {
                                     onPress={() => navigation.navigate('EmployeeList')}
                                     color={colors.primary}
                                 />
+                                <View style={styles.divider} />
+                                <MenuItem
+                                    icon="database-sync-outline"
+                                    title="Pencadangan Data"
+                                    subtitle="Auto backup & manajemen SQL"
+                                    onPress={() => navigation.navigate('BackupManagement')}
+                                    color={colors.success}
+                                />
                             </Surface>
                         </View>
                     )}
@@ -224,7 +232,7 @@ export default function ProfileScreen() {
                                 icon="lock-check-outline"
                                 title="Keamanan"
                                 subtitle="Ubah password & PIN"
-                                onPress={() => { }}
+                                onPress={() => navigation.navigate('SecuritySettings')}
                                 color={colors.textSecondary}
                             />
                             <View style={styles.divider} />
@@ -250,8 +258,14 @@ export default function ProfileScreen() {
                             <MenuItem
                                 icon="information-outline"
                                 title="Tentang Aplikasi"
-                                subtitle="Versi 1.0.0 (Build 2024)"
-                                onPress={() => { }}
+                                subtitle="Versi 1.0.0 (Build 2026)"
+                                onPress={() => {
+                                    Alert.alert(
+                                        'Tentang Aplikasi',
+                                        'CHIKO ABSENSI\nVersi 1.0.0 (Build 2026)\n\nAplikasi absensi modern untuk karyawan dan manajemen outlet. Dikembangkan untuk efisiensi dan kemudahan monitoring kehadiran.\n\n©2026 CHIKOGROUP DEVELOPMENT',
+                                        [{ text: 'Tutup', style: 'cancel' }]
+                                    );
+                                }}
                                 color={colors.textMuted}
                             />
                             <View style={styles.divider} />
@@ -265,7 +279,7 @@ export default function ProfileScreen() {
                         </Surface>
                     </View>
 
-                    <Text style={styles.footerText}>Chiko Attendance © 2024</Text>
+                    <Text style={styles.footerText}>CHIKO ABSENSI © 2026</Text>
                 </View>
             </ScrollView>
         </View>

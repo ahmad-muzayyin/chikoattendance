@@ -201,7 +201,7 @@ export default function HomeScreen() {
                 <Surface style={styles.clockCard} elevation={4}>
                     <View>
                         <Text style={styles.clockTime}>
-                            {currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                            {currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(/\./g, ':')}
                         </Text>
                         <Text style={styles.clockDate}>{formatDate(currentTime)}</Text>
                     </View>

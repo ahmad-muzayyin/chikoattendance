@@ -8,10 +8,26 @@ import axios from 'axios';
 export const API_CONFIG = {
     // PENTING: Ganti sesuai environment Anda
     // Emulator Android: Gunakan 10.0.2.2
-    // HP Fisik (scan QR): Gunakan IPv4 Laptop (cek 'ipconfig', misal: 192.168.1.x)
-    // BASE_URL: 'http://34.50.89.217/api',
-    BASE_URL: 'http://192.168.1.2:3000/api',
+    // =================================================================
+    // KONFIGURASI IP ADDRESS (Pilih Salah Satu)
+    // =================================================================
+
+    // 1. DEVELOPMENT (Expo Go / Emulator)
+    BASE_URL: 'http://192.168.0.100:3000/api',
+
+    // 2. PRODUCTION (VPS / Hosting)
+    // Ganti dengan IP VPS atau Domain Anda saat build APK
+    // BASE_URL: 'http://34.50.89.217/api', 
+
     TIMEOUT: 15000,
+    GOOGLE_CLIENT_IDS: {
+        // PERHATIAN: Ini untuk Package 'com.chiko.attendance'
+        // Jika pakai Expo Go, gunakan Client ID 'host.exp.exponent'
+        ANDROID: '513383800762-6254d965o78840ucneb3qt0r9g3rudad.apps.googleusercontent.com',
+        IOS: '513383800762-6254d965o78840ucneb3qt0r9g3rudad.apps.googleusercontent.com',
+        WEB: '513383800762-6254d965o78840ucneb3qt0r9g3rudad.apps.googleusercontent.com',
+    },
+    EXPO_REDIRECT_URI: 'https://auth.expo.io/@amue07/chiko-attendance'
 };
 
 export const ENDPOINTS = {

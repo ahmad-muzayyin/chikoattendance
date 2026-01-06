@@ -21,7 +21,8 @@ interface UserAttributes {
     shiftId?: number | null; // Optional Shift
     profile_picture?: string | null;
     pushToken?: string | null;
-    position?: string | null; // e.g. 'Koki', 'Kasir'
+    position?: string | null;
+    googleId?: string | null;
 }
 
 interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'branchId' | 'shiftId'> {
@@ -39,6 +40,7 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
     public profile_picture!: string | null;
     public pushToken!: string | null;
     public position!: string | null;
+    public googleId!: string | null;
     public readonly Branch?: Branch;
     public readonly Shift?: Shift;
 
@@ -99,6 +101,11 @@ User.init(
             type: DataTypes.STRING,
             allowNull: true,
             defaultValue: 'Staff'
+        },
+        googleId: {
+            type: DataTypes.STRING,
+            allowNull: true,
+            unique: true
         }
     },
     {

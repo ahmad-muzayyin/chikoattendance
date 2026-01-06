@@ -2,7 +2,6 @@
 import { MD3LightTheme, configureFonts, MD3DarkTheme } from 'react-native-paper';
 
 // Modern, Professional Color Palette
-// Modern, Professional Color Palette
 export const colors = {
     // Primary gradient colors
     primary: '#ec1616', // Requested Deep Red
@@ -97,12 +96,10 @@ export const typography = {
     headlineLarge: {
         fontSize: 28,
         fontWeight: '700' as const,
-        letterSpacing: -0.5,
     },
     headlineMedium: {
         fontSize: 24,
         fontWeight: '600' as const,
-        letterSpacing: -0.3,
     },
     headlineSmall: {
         fontSize: 20,

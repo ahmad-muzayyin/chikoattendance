@@ -1,6 +1,6 @@
 // d:\AHMAD MUZAYYIN\ChikoAttendance\mobile\src\screens\LoadingScreen.tsx
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Image, Dimensions } from 'react-native';
+import { View, StyleSheet, Animated, Image, Dimensions, StatusBar } from 'react-native';
 import { Text } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -72,7 +72,20 @@ export default function LoadingScreen() {
             await new Promise(r => setTimeout(r, 2500));
             try {
                 const token = await SecureStore.getItemAsync('authToken');
-                navigation.replace(token ? 'MainTabs' : 'Login');
+                const bioEnabled = await SecureStore.getItemAsync('isBiometricEnabled');
+                const storedPin = await SecureStore.getItemAsync('userPin');
+
+                if (token) {
+                    // If quick login is enabled, we still go to Login screen to "unlock"
+                    // but the LoginScreen will recognize the token and perform quick auth
+                    if (bioEnabled === 'true' || storedPin) {
+                        navigation.replace('Login');
+                    } else {
+                        navigation.replace('MainTabs');
+                    }
+                } else {
+                    navigation.replace('Login');
+                }
             } catch (error) {
                 console.log('Auth check error:', error);
                 navigation.replace('Login');
@@ -88,107 +101,90 @@ export default function LoadingScreen() {
 
     return (
         <View style={styles.container}>
-            {/* Gradient Background */}
-            <LinearGradient
-                colors={['#DC2626', '#991B1B', '#7F1D1D']}
-                style={styles.gradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-            >
-                {/* Animated Background Circles */}
-                <View style={styles.backgroundCircles}>
-                    <Animated.View
-                        style={[
-                            styles.circle,
-                            styles.circle1,
-                            { transform: [{ scale: pulseAnim }] }
-                        ]}
-                    />
-                    <Animated.View
-                        style={[
-                            styles.circle,
-                            styles.circle2,
-                            { transform: [{ scale: pulseAnim }] }
-                        ]}
-                    />
-                    <Animated.View
-                        style={[
-                            styles.circle,
-                            styles.circle3,
-                            { transform: [{ scale: pulseAnim }] }
-                        ]}
-                    />
-                </View>
+            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-                {/* Main Content */}
-                <View style={styles.content}>
-                    {/* Logo Container */}
-                    <Animated.View
-                        style={[
-                            styles.logoContainer,
-                            {
-                                opacity: fadeAnim,
-                                transform: [
-                                    { scale: scaleAnim },
-                                    { translateY: slideAnim }
-                                ],
-                            },
-                        ]}
-                    >
-                        <View style={styles.logoWrapper}>
+            {/* Diagonal Watermark Background (Matches LoginScreen) */}
+            <View style={styles.watermarkContainer} pointerEvents="none">
+                {[...Array(12)].map((_, i) => (
+                    <View key={i} style={[styles.watermarkRow, { marginLeft: i % 2 === 0 ? -100 : -20 }]}>
+                        {[...Array(5)].map((_, j) => (
                             <Image
+                                key={j}
                                 source={require('../../assets/logo.png')}
-                                style={styles.logo}
+                                style={styles.watermarkLogoItem}
                                 resizeMode="contain"
                             />
-                        </View>
-                    </Animated.View>
+                        ))}
+                    </View>
+                ))}
+            </View>
 
-                    {/* App Name & Tagline */}
-                    <Animated.View
-                        style={[
-                            styles.textContainer,
-                            {
-                                opacity: fadeAnim,
-                                transform: [{ translateY: slideAnim }]
-                            }
-                        ]}
-                    >
-                        <Text style={styles.appName}>Chiko</Text>
-                        <Text style={styles.appNameSub}>Attendance</Text>
-                        <View style={styles.divider} />
-                        <Text style={styles.tagline}>Sistem Absensi Modern & Profesional</Text>
-                    </Animated.View>
+            {/* Main Content */}
+            <View style={styles.content}>
+                {/* Logo Container */}
+                <Animated.View
+                    style={[
+                        styles.logoContainer,
+                        {
+                            opacity: fadeAnim,
+                            transform: [
+                                { scale: scaleAnim },
+                                { translateY: slideAnim }
+                            ],
+                        },
+                    ]}
+                >
+                    <Image
+                        source={require('../../assets/logo.png')}
+                        style={styles.logo}
+                        resizeMode="contain"
+                    />
+                </Animated.View>
 
-                    {/* Loading Indicator */}
-                    <Animated.View
-                        style={[
-                            styles.loadingContainer,
-                            { opacity: fadeAnim }
-                        ]}
-                    >
-                        <Animated.View style={{ transform: [{ rotate: spin }] }}>
-                            <MaterialCommunityIcons
-                                name="loading"
-                                size={32}
-                                color="rgba(255,255,255,0.9)"
-                            />
-                        </Animated.View>
-                        <Text style={styles.loadingText}>Memuat...</Text>
-                    </Animated.View>
+                {/* App Name & Tagline */}
+                <Animated.View
+                    style={[
+                        styles.textContainer,
+                        {
+                            opacity: fadeAnim,
+                            transform: [{ translateY: slideAnim }]
+                        }
+                    ]}
+                >
+                    <Text style={styles.appName}>Chiko</Text>
+                    <Text style={styles.appNameSub}>Absensi</Text>
+                    <View style={styles.divider} />
+                    <Text style={styles.tagline}>Sistem Absensi Modern & Profesional</Text>
+                </Animated.View>
 
-                    {/* Version */}
-                    <Animated.View
-                        style={[
-                            styles.versionContainer,
-                            { opacity: fadeAnim }
-                        ]}
-                    >
-                        <Text style={styles.versionText}>Version 1.0.0</Text>
-                        <Text style={styles.copyrightText}>© 2025 Chiko Attendance</Text>
+                {/* Loading Indicator */}
+                <Animated.View
+                    style={[
+                        styles.loadingContainer,
+                        { opacity: fadeAnim }
+                    ]}
+                >
+                    <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                        <MaterialCommunityIcons
+                            name="loading"
+                            size={32}
+                            color={colors.primary}
+                        />
                     </Animated.View>
-                </View>
-            </LinearGradient>
+                    <Text style={styles.loadingText}>Memuat...</Text>
+                </Animated.View>
+
+                {/* Version */}
+                <Animated.View
+                    style={[
+                        styles.versionContainer,
+                        { opacity: fadeAnim }
+                    ]}
+                >
+                    <Text style={styles.versionText}>Version 1.0.0</Text>
+                    <Text style={styles.copyrightText}>© 2026 Chiko Absensi</Text>
+                </Animated.View>
+            </View>
         </View>
     );
 }
@@ -196,37 +192,26 @@ export default function LoadingScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-    },
-    gradient: {
-        flex: 1,
-        position: 'relative',
-    },
-    backgroundCircles: {
-        ...StyleSheet.absoluteFillObject,
+        backgroundColor: '#FFFFFF', // White background
         overflow: 'hidden',
     },
-    circle: {
-        position: 'absolute',
-        borderRadius: 1000,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    },
-    circle1: {
-        width: 400,
-        height: 400,
-        top: -200,
-        right: -100,
-    },
-    circle2: {
-        width: 300,
-        height: 300,
-        bottom: -150,
+    watermarkContainer: {
+        ...StyleSheet.absoluteFillObject,
+        transform: [{ rotate: '-15deg' }, { scale: 1.5 }],
+        top: -100,
         left: -100,
+        zIndex: 0,
+        opacity: 0.6,
     },
-    circle3: {
-        width: 200,
-        height: 200,
-        top: height / 2 - 100,
-        left: -50,
+    watermarkRow: {
+        flexDirection: 'row',
+        marginBottom: 80,
+    },
+    watermarkLogoItem: {
+        width: 60,
+        height: 60,
+        marginRight: 80,
+        opacity: 0.07, // Subtle watermark
     },
     content: {
         flex: 1,
@@ -237,24 +222,15 @@ const styles = StyleSheet.create({
     },
     logoContainer: {
         marginBottom: spacing.xl,
-    },
-    logoWrapper: {
-        width: 140,
-        height: 140,
-        borderRadius: 28,
-        backgroundColor: '#FFFFFF',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: spacing.md,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-        elevation: 12,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.15,
+        shadowRadius: 20,
+        elevation: 10,
     },
     logo: {
-        width: 120,
-        height: 120,
+        width: 140,
+        height: 140,
     },
     textContainer: {
         alignItems: 'center',
@@ -263,34 +239,29 @@ const styles = StyleSheet.create({
     appName: {
         fontSize: 48,
         fontWeight: '800',
-        color: '#FFFFFF',
+        color: colors.primary, // Red Text
         textAlign: 'center',
         letterSpacing: -1,
-        textShadowColor: 'rgba(0, 0, 0, 0.3)',
-        textShadowOffset: { width: 0, height: 2 },
-        textShadowRadius: 4,
     },
     appNameSub: {
         fontSize: 32,
         fontWeight: '300',
-        color: '#FFFFFF',
+        color: colors.textSecondary, // Dark Grey Text
         textAlign: 'center',
         marginTop: -8,
         letterSpacing: 4,
         textTransform: 'uppercase',
-        opacity: 0.9,
     },
     divider: {
         width: 60,
         height: 3,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: colors.primary,
         borderRadius: 2,
         marginVertical: spacing.md,
-        opacity: 0.8,
     },
     tagline: {
         fontSize: 14,
-        color: 'rgba(255, 255, 255, 0.85)',
+        color: colors.textSecondary,
         textAlign: 'center',
         fontWeight: '400',
         letterSpacing: 0.5,
@@ -303,7 +274,7 @@ const styles = StyleSheet.create({
     },
     loadingText: {
         fontSize: 14,
-        color: 'rgba(255, 255, 255, 0.9)',
+        color: colors.textSecondary,
         fontWeight: '500',
     },
     versionContainer: {
@@ -313,13 +284,13 @@ const styles = StyleSheet.create({
     },
     versionText: {
         fontSize: 12,
-        color: 'rgba(255, 255, 255, 0.6)',
+        color: colors.textMuted,
         fontWeight: '500',
         marginBottom: 4,
     },
     copyrightText: {
         fontSize: 11,
-        color: 'rgba(255, 255, 255, 0.5)',
+        color: colors.textMuted,
         fontWeight: '400',
     },
 });

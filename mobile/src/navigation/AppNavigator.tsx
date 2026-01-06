@@ -26,6 +26,8 @@ import UserFormScreen from '../screens/UserFormScreen';
 import RecapDetailScreen from '../screens/RecapDetailScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
+import SecuritySettingsScreen from '../screens/SecuritySettingsScreen';
+import BackupManagementScreen from '../screens/BackupManagementScreen';
 
 import OwnerRecapBranchScreen from '../screens/OwnerRecapBranchScreen';
 import OwnerRecapEmployeesScreen from '../screens/OwnerRecapEmployeesScreen';
@@ -46,6 +48,8 @@ export type RootStackParamList = {
     RecapDetail: { month: string; monthCode: string };
     Settings: undefined;
     Notifications: undefined;
+    SecuritySettings: undefined;
+    BackupManagement: undefined;
     OwnerRecapBranch: undefined;
     OwnerRecapEmployees: { branchId: any; branchName: string };
     OwnerRecapDetail: { userId: any; userName: string };
@@ -186,7 +190,9 @@ export default function AppNavigator() {
                         {/* Shared Screens */}
                         <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, title: 'Pengaturan Akun' }} />
                         <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false }} />
+                        <Stack.Screen name="SecuritySettings" component={SecuritySettingsScreen} options={{ headerShown: true, title: 'Keamanan' }} />
                         <Stack.Screen name="Points" component={PointsScreen} options={{ headerShown: true, title: 'Poin & Sanksi' }} />
+                        <Stack.Screen name="BackupManagement" component={BackupManagementScreen} options={{ headerShown: true, title: 'Pencadangan Data' }} />
                     </Stack.Navigator>
                 </NavigationContainer>
             </PaperProvider>
