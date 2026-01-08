@@ -113,9 +113,12 @@ export const useAuth = () => {
     }, []);
 
     const logout = useCallback(async () => {
-        await SecureStore.deleteItemAsync('authToken');
-        await SecureStore.deleteItemAsync('userName');
-        await SecureStore.deleteItemAsync('userRole');
+        // Jangan hapus token agar biometrik tetap bisa dipakai
+        // await SecureStore.deleteItemAsync('authToken');
+        // await SecureStore.deleteItemAsync('userName');
+        // await SecureStore.deleteItemAsync('userRole');
+
+        // Hapus header axios agar request berikutnya tidak otomatis authenticated sebelum login ulang
         delete axios.defaults.headers.common['Authorization'];
 
         setState({

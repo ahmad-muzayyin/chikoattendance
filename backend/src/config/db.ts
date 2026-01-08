@@ -20,7 +20,8 @@ export const connectDB = async () => {
         await sequelize.authenticate();
         console.log('Database connected successfully.');
         // Sync models (in production, use migrations instead of sync({ alter: true }))
-        await sequelize.sync({ alter: true });
+        // await sequelize.sync({ alter: true }); // Disabled to prevent Too many keys error
+        await sequelize.sync({ alter: false });
         console.log('Models synchronized.');
     } catch (error) {
         console.error('Unable to connect to the database:', error);

@@ -30,7 +30,7 @@ export default function HomeScreen() {
     const { user, checkAuth } = useAuth();
     const [refreshing, setRefreshing] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date());
-    const [stats, setStats] = useState({ hadir: 0, telat: 0, izin: 0, alpha: 0 });
+    const [stats, setStats] = useState({ hadir: 0, telat: 0, lembur: 0, izin: 0, alpha: 0 });
 
     const fetchStats = async () => {
         try {
@@ -222,6 +222,9 @@ export default function HomeScreen() {
                     <StatItem label="Hadir" value={stats.hadir.toString()} color={colors.success} />
                     <View style={styles.statDivider} />
                     <StatItem label="Telat" value={stats.telat.toString()} color={colors.warning} />
+                    <View style={styles.statDivider} />
+                    {/* Lembur Stat */}
+                    <StatItem label="Lembur" value={stats.lembur.toString()} color="#9333EA" />
                     <View style={styles.statDivider} />
                     <StatItem label="Izin" value={stats.izin.toString()} color={colors.info} />
                     <View style={styles.statDivider} />

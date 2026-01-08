@@ -186,7 +186,8 @@ export const getDailyMonitoring = async (req: Request, res: Response) => {
                 notes: checkIn?.notes,
                 photoUrl: checkIn?.photoUrl,
                 totalPoints,
-                isHighRisk
+                isHighRisk,
+                isOvertime: checkOut ? checkOut.isOvertime : false
             };
         });
 

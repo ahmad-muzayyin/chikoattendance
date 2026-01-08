@@ -443,6 +443,7 @@ export const getDashboardStats = async (req: AuthRequest, res: Response) => {
         const stats = {
             hadir: attendances.filter(a => a.type === AttendanceType.CHECK_IN && !a.isLate).length,
             telat: attendances.filter(a => a.isLate && a.type === AttendanceType.CHECK_IN).length,
+            lembur: attendances.filter(a => a.isOvertime).length,
             izin: attendances.filter(a => a.type === AttendanceType.PERMIT || a.type === AttendanceType.SICK).length,
             alpha: attendances.filter(a => a.type === AttendanceType.ALPHA).length
         };

@@ -87,12 +87,12 @@ export default function AttendanceInputScreen() {
 
     const handleSubmit = async (type: 'CHECK_IN' | 'CHECK_OUT') => {
         if (!location) {
-            setResultModal({ visible: true, type: 'error', message: 'Lokasi Anda belum terlacak. Mohon aktifkan GPS.' });
+            setResultModal({ visible: true, type: 'error', message: 'Lokasi belum ditemukan. Mohon tunggu sejenak atau pastikan GPS aktif.' });
             return;
         }
 
         if (type === 'CHECK_IN' && !photo) {
-            setResultModal({ visible: true, type: 'error', message: 'Anda wajib mengambil foto selfie.' });
+            setResultModal({ visible: true, type: 'error', message: 'Foto Selfie wajib diambil sebagai bukti kehadiran.' });
             return;
         }
 
@@ -113,10 +113,16 @@ export default function AttendanceInputScreen() {
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
+            // Personalised Success Messages
+            let successTitle = type === 'CHECK_IN' ? 'Absensi Masuk Berhasil' : 'Absensi Pulang Berhasil';
+            let successMsg = type === 'CHECK_IN'
+                ? 'Selamat bekerja! Semangat untuk hari ini.'
+                : 'Terima kasih atas kerja kerasmu hari ini. Hati-hati di jalan!';
+
             setResultModal({
                 visible: true,
                 type: 'success',
-                message: `${type === 'CHECK_IN' ? 'Berhasil Masuk!' : 'Berhasil Pulang!'}`,
+                message: successMsg,
                 data: res.data
             });
 
@@ -128,7 +134,7 @@ export default function AttendanceInputScreen() {
 
             // NETWORK / SERVER DOWN
             if (!error.response) {
-                msg = 'Koneksi gagal. Periksa internet Anda atau server sedang maintenance.';
+                msg = 'Gagal terhubung ke server. Periksa koneksi internet Anda.';
             }
             // 400 - BAD REQUEST (Logika Bisnis)
             else if (status === 400) {
@@ -138,32 +144,34 @@ export default function AttendanceInputScreen() {
                     setResultModal({
                         visible: true,
                         type: 'range',
-                        message: 'Posisi Anda Diluar Radius Absensi',
+                        message: 'Lokasi Anda Terlalu Jauh dari Outlet',
                         data: { distance: resData.distance, max: resData.maxRadius }
                     });
-                    return; // Exit here as we used specific modal type
+                    return;
                 }
 
                 if (lowerMsg.includes('already') || lowerMsg.includes('sudah')) {
-                    msg = type === 'CHECK_IN' ? 'Anda sudah tercatat MASUK hari ini.' : 'Anda sudah tercatat PULANG hari ini.';
-                    title = 'Duplikat Absensi';
+                    msg = type === 'CHECK_IN'
+                        ? 'Anda sudah melakukan absensi MASUK hari ini.'
+                        : 'Anda sudah melakukan absensi PULANG hari ini.';
+                    title = 'Absensi Duplikat';
                 } else if (lowerMsg.includes('shift') || lowerMsg.includes('schedule')) {
-                    msg = 'Jadwal Shift tidak ditemukan atau belum saatnya absen.';
+                    msg = 'Tidak ada jadwal shift yang aktif saat ini. Hubungi supervisor jika jadwal tidak sesuai.';
                     title = 'Diluar Jadwal';
                 } else if (lowerMsg.includes('face') || lowerMsg.includes('wajah')) {
-                    msg = 'Wajah tidak terdeteksi dengan jelas. Pastikan pencahayaan cukup dan wajah terlihat.';
-                    title = 'Foto Tidak Valid';
+                    msg = 'Wajah tidak terdeteksi dengan jelas di foto. Mohon foto ulang di tempat terang.';
+                    title = 'Wajah Tidak Terdeteksi';
                 }
             }
             // 403 - FORBIDDEN
             else if (status === 403) {
-                msg = 'Akun Anda tidak berhak melakukan absensi ini. Hubungi atasan.';
+                msg = 'Akun Anda tidak memiliki izin untuk melakukan absensi ini.';
                 title = 'Akses Ditolak';
             }
             // 500 - SERVER ERROR
             else if (status >= 500) {
-                msg = 'Server sedang mengalami gangguan. Mohon tunggu sebentar dan coba lagi.';
-                title = 'Server Error';
+                msg = 'Server sedang sibuk atau mengalami gangguan. Mohon coba beberapa saat lagi.';
+                title = 'Gangguan Server';
             }
 
             setResultModal({

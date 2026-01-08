@@ -101,11 +101,24 @@ export default function EmployeeListScreen() {
                     </View>
 
                     <View style={{ alignItems: 'flex-end' }}>
-                        <View style={[styles.statusBadge, { backgroundColor: getStatusBg(item.status) }]}>
-                            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-                                {item.status}
-                            </Text>
+                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                            {/* Overtime Badge */}
+                            {item.isOvertime && (
+                                <View style={[styles.statusBadge, { backgroundColor: '#F3E8FF' }]}>
+                                    <Text style={[styles.statusText, { color: '#9333EA' }]}>
+                                        Lembur
+                                    </Text>
+                                </View>
+                            )}
+
+                            {/* Standard Status Badge */}
+                            <View style={[styles.statusBadge, { backgroundColor: getStatusBg(item.status) }]}>
+                                <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+                                    {item.status}
+                                </Text>
+                            </View>
                         </View>
+
                         {item.isHighRisk && (
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, backgroundColor: '#FEF2F2', padding: 4, borderRadius: 8 }}>
                                 <MaterialCommunityIcons name="alert-circle" size={14} color={colors.error} />

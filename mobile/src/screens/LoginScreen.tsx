@@ -17,7 +17,6 @@ import {
     TextInput,
     Button,
     Text,
-    IconButton,
 } from 'react-native-paper';
 import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -30,13 +29,12 @@ import { API_CONFIG, ENDPOINTS } from '../config/api';
 import { colors, spacing, borderRadius, shadows } from '../theme/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Google from 'expo-auth-session/providers/google';
-import { makeRedirectUri } from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 
 WebBrowser.maybeCompleteAuthSession();
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 export default function LoginScreen() {
     const navigation = useNavigation<NavProp>();
@@ -45,12 +43,13 @@ export default function LoginScreen() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [secureTextEntry, setSecureTextEntry] = useState(true);
+
+    // Biometric & PIN State
     const [isBioAvailable, setIsBioAvailable] = useState(false);
     const [isBioEnabled, setIsBioEnabled] = useState(false);
     const [hasPin, setHasPin] = useState(false);
     const [pinModalVisible, setPinModalVisible] = useState(false);
     const [inputPin, setInputPin] = useState('');
-    const [isUnlockMode, setIsUnlockMode] = useState(false);
     const [savedName, setSavedName] = useState('');
     const [initializing, setInitializing] = useState(true);
 
@@ -70,17 +69,69 @@ export default function LoginScreen() {
         }
     }, [response]);
 
+    useEffect(() => {
+        const checkQuickLogin = async () => {
+            try {
+                const bioHardware = await LocalAuthentication.hasHardwareAsync();
+                const bioEnabled = await SecureStore.getItemAsync('isBiometricEnabled');
+                const storedPin = await SecureStore.getItemAsync('userPin');
+
+                // Load data
+                const token = await SecureStore.getItemAsync('authToken');
+                const name = await SecureStore.getItemAsync('userName');
+
+                const hasSession = !!token;
+
+                setIsBioAvailable(bioHardware);
+                setIsBioEnabled(bioEnabled === 'true');
+                setHasPin(!!storedPin);
+
+                if (name) {
+                    setSavedName(name); // Set state immediately
+                }
+
+                if (bioHardware && bioEnabled === 'true' && hasSession) {
+                    // Pass current 'name' directly to avoid stale state issues in prompt
+                    setTimeout(() => handleBiometricLogin(!!storedPin, name), 800);
+                }
+            } catch (err) {
+                console.log('Error init quick login', err);
+            } finally {
+                setInitializing(false);
+            }
+        };
+        checkQuickLogin();
+    }, []);
+
     const handleGoogleLoginResponse = async (idToken: string) => {
         setLoading(true);
         setError(null);
         try {
-            await clearOldCredentials();
+            await SecureStore.deleteItemAsync('authToken');
+            await SecureStore.deleteItemAsync('securedAuthToken');
+            await SecureStore.deleteItemAsync('userPassword');
+
             const { data } = await axios.post(`${API_CONFIG.BASE_URL}/auth/google/login`, {
                 idToken
             });
+
+            // Log untuk debug
+            const userName = data.user.name || 'Owner';
+            console.log('Google Login Success. Name:', userName);
+
             await SecureStore.setItemAsync('authToken', data.token);
-            await SecureStore.setItemAsync('userName', data.user.name || 'Owner');
+            await SecureStore.setItemAsync('userName', userName);
+            await SecureStore.setItemAsync('userRole', data.user.role || 'OWNER');
+
+            // Set savedName agar UI update
+            setSavedName(userName);
+
+            if (data.user.email) {
+                await SecureStore.setItemAsync('userEmail', data.user.email);
+            }
+
             navigation.replace('MainTabs');
+
         } catch (err: any) {
             setError(err?.response?.data?.message || 'Login Google gagal');
             console.error(err);
@@ -89,54 +140,15 @@ export default function LoginScreen() {
         }
     };
 
-    useEffect(() => {
-        const checkQuickLogin = async () => {
-            try {
-                const bioHardware = await LocalAuthentication.hasHardwareAsync();
-                const bioEnabled = await SecureStore.getItemAsync('isBiometricEnabled');
-                const storedPin = await SecureStore.getItemAsync('userPin');
-                const token = await SecureStore.getItemAsync('authToken');
-                const savedEmail = await SecureStore.getItemAsync('userEmail');
-                const savedPassword = await SecureStore.getItemAsync('userPassword');
-                const name = await SecureStore.getItemAsync('userName');
-
-                const hasCreds = !!(savedEmail && savedPassword);
-
-                setIsBioAvailable(bioHardware);
-                setIsBioEnabled(bioEnabled === 'true');
-                setHasPin(!!storedPin);
-
-                if (name) setSavedName(name);
-
-                const shouldUnlock = !!token || hasCreds;
-                setIsUnlockMode(shouldUnlock);
-
-                if (bioHardware && bioEnabled === 'true' && shouldUnlock) {
-                    // Delay slightly to let UI render name
-                    setTimeout(() => handleBiometricLogin(!!storedPin), 800);
-                }
-            } finally {
-                setInitializing(false);
-            }
-        };
-        checkQuickLogin();
-    }, []);
-
-    const clearOldCredentials = async () => {
-        await SecureStore.deleteItemAsync('authToken');
-        await SecureStore.deleteItemAsync('securedAuthToken');
-        await SecureStore.deleteItemAsync('isBiometricEnabled');
-        await SecureStore.deleteItemAsync('userPin');
-        await SecureStore.deleteItemAsync('userEmail');
-        await SecureStore.deleteItemAsync('userPassword');
-        await SecureStore.deleteItemAsync('userName');
-    };
-
-    const handleBiometricLogin = async (pinExists: boolean = hasPin) => {
+    // Modified to accept optional nameoverride for initial load
+    const handleBiometricLogin = async (pinExists: boolean = hasPin, nameOverride?: string | null) => {
         try {
+            // Priority: Name param -> State -> Default
+            const displayName = nameOverride || savedName || 'User';
+
             const result = await LocalAuthentication.authenticateAsync({
-                promptMessage: `Login Biometrik ${savedName || 'Siap'}`,
-                cancelLabel: pinExists ? 'Gunakan PIN' : 'Gunakan Password',
+                promptMessage: `Login kembali sebagai ${displayName}`,
+                cancelLabel: pinExists ? 'Gunakan PIN' : 'Batal',
             });
 
             if (result.success) {
@@ -178,32 +190,37 @@ export default function LoginScreen() {
             return;
         }
 
-        // SMART CHECK: Only clear credentials if switching to A DIFFERENT account
-        const storedEmail = await SecureStore.getItemAsync('userEmail');
-        if (!manualEmail && emailFinal.trim().toLowerCase() !== storedEmail) {
-            await clearOldCredentials();
-        } else if (manualEmail && emailFinal.trim().toLowerCase() !== storedEmail) {
-            // If manual login and email is different, wipe old data
-            await clearOldCredentials();
-        }
-        // If email is same, keep biometric settings!
-
         setError('');
         setLoading(true);
         try {
+            const storedEmail = await SecureStore.getItemAsync('userEmail');
+            const isDifferentUser = storedEmail && storedEmail !== emailFinal.trim().toLowerCase();
+
+            if (isDifferentUser) {
+                await SecureStore.deleteItemAsync('authToken');
+                await SecureStore.deleteItemAsync('securedAuthToken');
+                await SecureStore.deleteItemAsync('userPassword');
+            }
+
             const { data } = await axios.post(
                 `${API_CONFIG.BASE_URL}${ENDPOINTS.LOGIN}`,
                 { email: emailFinal.trim().toLowerCase(), password: passwordFinal }
             );
 
-            // Save Session
+            await SecureStore.deleteItemAsync('securedAuthToken');
+
+            const userName = data.user?.name || 'User';
+            setSavedName(userName);
+
             await SecureStore.setItemAsync('authToken', data.token);
-            await SecureStore.setItemAsync('userName', data.user?.name || 'User');
+            await SecureStore.setItemAsync('userName', userName);
             await SecureStore.setItemAsync('userRole', data.user?.role || 'EMPLOYEE');
 
-            // Save Credentials for Biometric Fallback (Token Expiry)
             await SecureStore.setItemAsync('userEmail', emailFinal.trim().toLowerCase());
-            await SecureStore.setItemAsync('userPassword', passwordFinal);
+
+            if (passwordFinal) {
+                await SecureStore.setItemAsync('userPassword', passwordFinal);
+            }
 
             navigation.replace('MainTabs');
         } catch (e: any) {
@@ -217,49 +234,47 @@ export default function LoginScreen() {
     const performQuickLogin = async () => {
         setLoading(true);
         try {
-            let token = await SecureStore.getItemAsync('securedAuthToken');
-            if (!token) token = await SecureStore.getItemAsync('authToken');
+            const token = await SecureStore.getItemAsync('authToken');
 
             if (token) {
                 try {
-                    // Try validating token
                     const { data } = await axios.get(`${API_CONFIG.BASE_URL}/auth/me`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
 
-                    // Update fresh data
-                    // Handle variable response structure (data.name or data.user.name)
-                    const realName = data.name || data.user?.name || (data.email ? data.email.split('@')[0] : 'Owner');
+                    const realName = data.name || data.user?.name || 'User';
+                    const realRole = data.role || data.user?.role;
+
                     await SecureStore.setItemAsync('userName', realName);
-                    setSavedName(realName); // Update state so it shows correctly next time without reload
+                    if (realRole) await SecureStore.setItemAsync('userRole', realRole);
 
-                    if (data.role || data.user?.role) {
-                        await SecureStore.setItemAsync('userRole', data.role || data.user?.role);
-                    }
-
+                    setSavedName(realName);
                     navigation.replace('MainTabs');
-                    return; // Success
+                    return;
+
                 } catch (tokenErr) {
-                    // Token expired
+                    throw new Error('Sesi kedaluwarsa');
                 }
-            }
-
-            // Fallback: Try Login with Stored Credentials
-            const savedEmail = await SecureStore.getItemAsync('userEmail');
-            const savedPassword = await SecureStore.getItemAsync('userPassword');
-
-            if (savedEmail && savedPassword) {
-                // Re-login using handleLogin (which handles navigation)
-                await handleLogin(savedEmail, savedPassword);
             } else {
-                throw new Error('No credentials found');
+                throw new Error('No token found');
             }
 
-        } catch (error) {
-            setError('Sesi kedaluwarsa. Silakan login ulang.');
-            setIsUnlockMode(false);
-            await SecureStore.deleteItemAsync('authToken');
-            await SecureStore.deleteItemAsync('securedAuthToken');
+        } catch (error: any) {
+            console.log('Quick login error details:', error);
+
+            // Jika tidak ada token (misal baru install), jangan tampilkan error, biarkan user login manual
+            if (error.message === 'No token found') {
+                setError(null);
+            }
+            // Sesi benar-benar habis/expired dari server
+            else if (error.message === 'Sesi kedaluwarsa' || error.response?.status === 403 || error.response?.status === 401) {
+                await SecureStore.deleteItemAsync('authToken');
+                setError('Sesi telah berakhir. Mohon login ulang.');
+            }
+            // Error lain (koneksi, dll)
+            else {
+                setError('Gagal verifikasi otomatis. Silakan login manual.');
+            }
         } finally {
             setLoading(false);
         }
@@ -273,205 +288,147 @@ export default function LoginScreen() {
         promptAsync();
     };
 
-    const handleSwitchAccount = async () => {
-        Alert.alert('Konfirmasi', 'Keluar dari mode kunci aplikasi?', [
-            { text: 'Batal', style: 'cancel' },
-            {
-                text: 'Ya, Keluar',
-                style: 'destructive',
-                onPress: async () => {
-                    await SecureStore.deleteItemAsync('authToken');
-                    await SecureStore.deleteItemAsync('securedAuthToken');
-                    setIsUnlockMode(false);
-                    setEmail('');
-                    setPassword('');
-                }
-            }
-        ]);
-    };
+    // Manual handler for UI Button click (uses State savedName)
+    const handleBioBtnClick = () => {
+        handleBiometricLogin(hasPin, savedName);
+    }
 
     return (
         <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
-            {/* Diagonal Watermark Background */}
-            <View style={styles.watermarkContainer} pointerEvents="none">
-                {[...Array(12)].map((_, i) => (
-                    <View key={i} style={[styles.watermarkRow, { marginLeft: i % 2 === 0 ? -100 : -20 }]}>
-                        {[...Array(5)].map((_, j) => (
-                            <Image
-                                key={j}
-                                source={require('../../assets/logo.png')}
-                                style={styles.watermarkLogoItem}
-                                resizeMode="contain"
-                            />
-                        ))}
-                    </View>
-                ))}
+            {/* Background Decorations */}
+            <View style={styles.headerDecoration}>
+                <View style={[styles.circle, styles.circle1]} />
+                <View style={[styles.circle, styles.circle2]} />
             </View>
 
-            {initializing ? (
-                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                    <Image source={require('../../assets/logo.png')} style={{ width: 100, height: 100, marginBottom: 20 }} resizeMode="contain" />
-                    <ActivityIndicator size="large" color={colors.primary} />
-                </View>
-            ) : (
-                <View style={styles.headerDecoration}>
-                    <View style={[styles.circle, styles.circle1]} />
-                    <View style={[styles.circle, styles.circle2]} />
-                </View>
-            )}
-
-            {!initializing && (
-                <ScrollView
-                    contentContainerStyle={styles.scrollContent}
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={false}
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+            >
+                <KeyboardAvoidingView
+                    style={styles.keyboardView}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 >
-                    <KeyboardAvoidingView
-                        style={styles.keyboardView}
-                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    {/* Logo Section */}
+                    <View style={styles.logoSection}>
+                        <Image
+                            source={require('../../assets/logo.png')}
+                            style={styles.logo}
+                            resizeMode="contain"
+                        />
+                        <Text style={styles.welcomeText}>
+                            {savedName ? `Hai, ${savedName}` : 'Selamat Datang'}
+                        </Text>
+                        <Text style={styles.subtitleText}>
+                            Masuk ke akun Chiko Anda
+                        </Text>
+                    </View>
+
+                    {/* Form Section */}
+                    <Animated.View
+                        style={[
+                            styles.formCard,
+                            { transform: [{ translateX: shakeAnim }] }
+                        ]}
                     >
-                        {/* Logo Section */}
-                        <View style={styles.logoSection}>
-                            <Image
-                                source={require('../../assets/logo.png')}
-                                style={styles.logo}
-                                resizeMode="contain"
-                            />
-                            <Text style={styles.welcomeText}>
-                                {isUnlockMode ? `Hai, ${savedName || 'User'}` : 'Selamat Datang'}
-                            </Text>
-                            <Text style={styles.subtitleText}>
-                                {isUnlockMode
-                                    ? 'Gunakan PIN atau Biometrik untuk melanjutkan'
-                                    : 'Masuk ke akun Chiko Anda'}
-                            </Text>
+                        {error && (
+                            <View style={styles.errorContainer}>
+                                <MaterialCommunityIcons name="alert-circle" size={20} color={colors.error} />
+                                <Text style={styles.errorText}>{error}</Text>
+                            </View>
+                        )}
+
+                        <TextInput
+                            label="Email"
+                            value={email}
+                            onChangeText={setEmail}
+                            placeholder="ck@chiko.com"
+                            mode="outlined"
+                            autoCapitalize="none"
+                            keyboardType="email-address"
+                            style={styles.input}
+                            outlineStyle={styles.inputOutline}
+                            left={<TextInput.Icon icon="email-outline" color={colors.textMuted} />}
+                        />
+
+                        <TextInput
+                            label="Password"
+                            value={password}
+                            onChangeText={setPassword}
+                            mode="outlined"
+                            secureTextEntry={secureTextEntry}
+                            style={styles.input}
+                            outlineStyle={styles.inputOutline}
+                            left={<TextInput.Icon icon="lock-outline" color={colors.textMuted} />}
+                            right={
+                                <TextInput.Icon
+                                    icon={secureTextEntry ? "eye-outline" : "eye-off-outline"}
+                                    onPress={() => setSecureTextEntry(!secureTextEntry)}
+                                    color={colors.textMuted}
+                                />
+                            }
+                        />
+
+                        <TouchableOpacity style={styles.forgotBtn}>
+                            <Text style={styles.forgotText}>Lupa Password?</Text>
+                        </TouchableOpacity>
+
+                        <Button
+                            mode="contained"
+                            onPress={() => handleLogin()}
+                            loading={loading}
+                            disabled={loading}
+                            style={styles.loginButton}
+                            contentStyle={styles.loginButtonContent}
+                        >
+                            Masuk
+                        </Button>
+
+                        <View style={styles.dividerContainer}>
+                            <View style={styles.divider} />
+                            <Text style={styles.dividerText}>Opsi Login Lain</Text>
+                            <View style={styles.divider} />
                         </View>
 
-                        {/* Form Section */}
-                        <Animated.View
-                            style={[
-                                styles.formCard,
-                                { transform: [{ translateX: shakeAnim }] }
-                            ]}
-                        >
-                            {error && (
-                                <View style={styles.errorContainer}>
-                                    <MaterialCommunityIcons name="alert-circle" size={20} color={colors.error} />
-                                    <Text style={styles.errorText}>{error}</Text>
-                                </View>
-                            )}
+                        <View style={styles.quickAccessRow}>
+                            {/* Biometric Button */}
+                            <View style={{ alignItems: 'center' }}>
+                                <TouchableOpacity
+                                    onPress={handleBioBtnClick}
+                                    disabled={!isBioEnabled}
+                                    style={[styles.iconBtn, !isBioEnabled && styles.iconBtnDisabled]}
+                                >
+                                    <MaterialCommunityIcons name="fingerprint" size={28} color={isBioEnabled ? colors.primary : colors.textMuted} />
+                                </TouchableOpacity>
+                                <Text style={[styles.iconLabel, !isBioEnabled && { color: colors.textMuted }]}>Bio</Text>
+                            </View>
 
-                            {!isUnlockMode && (
-                                <>
-                                    <TextInput
-                                        label="Email"
-                                        value={email}
-                                        onChangeText={setEmail}
-                                        placeholder="ck@chiko.com"
-                                        mode="outlined"
-                                        autoCapitalize="none"
-                                        keyboardType="email-address"
-                                        style={styles.input}
-                                        outlineStyle={styles.inputOutline}
-                                        left={<TextInput.Icon icon="email-outline" color={colors.textMuted} />}
-                                    />
+                            {/* PIN Button */}
+                            <View style={{ alignItems: 'center' }}>
+                                <TouchableOpacity
+                                    onPress={() => setPinModalVisible(true)}
+                                    disabled={!hasPin}
+                                    style={[styles.iconBtn, !hasPin && styles.iconBtnDisabled]}
+                                >
+                                    <MaterialCommunityIcons name="numeric" size={28} color={hasPin ? colors.primary : colors.textMuted} />
+                                </TouchableOpacity>
+                                <Text style={[styles.iconLabel, !hasPin && { color: colors.textMuted }]}>PIN</Text>
+                            </View>
 
-                                    <TextInput
-                                        label="Password"
-                                        value={password}
-                                        onChangeText={setPassword}
-                                        mode="outlined"
-                                        secureTextEntry={secureTextEntry}
-                                        style={styles.input}
-                                        outlineStyle={styles.inputOutline}
-                                        left={<TextInput.Icon icon="lock-outline" color={colors.textMuted} />}
-                                        right={
-                                            <TextInput.Icon
-                                                icon={secureTextEntry ? "eye-outline" : "eye-off-outline"}
-                                                onPress={() => setSecureTextEntry(!secureTextEntry)}
-                                                color={colors.textMuted}
-                                            />
-                                        }
-                                    />
-
-                                    <TouchableOpacity style={styles.forgotBtn}>
-                                        <Text style={styles.forgotText}>Lupa Password?</Text>
-                                    </TouchableOpacity>
-
-                                    <Button
-                                        mode="contained"
-                                        onPress={() => handleLogin()}
-                                        loading={loading}
-                                        disabled={loading}
-                                        style={styles.loginButton}
-                                        contentStyle={styles.loginButtonContent}
-                                    >
-                                        Masuk
-                                    </Button>
-
-                                    <View style={styles.dividerContainer}>
-                                        <View style={styles.divider} />
-                                        <Text style={styles.dividerText}>Opsi Login Lain</Text>
-                                        <View style={styles.divider} />
-                                    </View>
-
-                                    <View style={styles.quickAccessRow}>
-                                        <View style={{ alignItems: 'center' }}>
-                                            <TouchableOpacity onPress={() => handleBiometricLogin()} disabled={!isBioEnabled} style={[styles.iconBtn, !isBioEnabled && styles.iconBtnDisabled]}>
-                                                <MaterialCommunityIcons name="fingerprint" size={28} color={isBioEnabled ? colors.primary : colors.textMuted} />
-                                            </TouchableOpacity>
-                                            <Text style={[styles.iconLabel, !isBioEnabled && { color: colors.textMuted }]}>Bio</Text>
-                                        </View>
-                                        <View style={{ alignItems: 'center' }}>
-                                            <TouchableOpacity onPress={() => setPinModalVisible(true)} disabled={!hasPin} style={[styles.iconBtn, !hasPin && styles.iconBtnDisabled]}>
-                                                <MaterialCommunityIcons name="numeric" size={28} color={hasPin ? colors.primary : colors.textMuted} />
-                                            </TouchableOpacity>
-                                            <Text style={[styles.iconLabel, !hasPin && { color: colors.textMuted }]}>PIN</Text>
-                                        </View>
-                                        <View style={{ alignItems: 'center' }}>
-                                            <TouchableOpacity onPress={handleGoogleLogin} style={styles.iconBtn}>
-                                                <MaterialCommunityIcons name="google" size={26} color="#4285F4" />
-                                            </TouchableOpacity>
-                                            <Text style={styles.iconLabel}>Owner</Text>
-                                        </View>
-                                    </View>
-                                </>
-                            )}
-
-                            {isUnlockMode && (
-                                <View style={styles.unlockContainer}>
-                                    <View style={styles.quickActions}>
-                                        {isBioAvailable && isBioEnabled && (
-                                            <TouchableOpacity
-                                                style={styles.quickActionBtn}
-                                                onPress={() => handleBiometricLogin()}
-                                            >
-                                                <MaterialCommunityIcons name="fingerprint" size={40} color={colors.primary} />
-                                                <Text style={styles.quickActionLabel}>Biometrik</Text>
-                                            </TouchableOpacity>
-                                        )}
-                                        {hasPin && (
-                                            <TouchableOpacity
-                                                style={styles.quickActionBtn}
-                                                onPress={() => setPinModalVisible(true)}
-                                            >
-                                                <MaterialCommunityIcons name="numeric" size={40} color={colors.primary} />
-                                                <Text style={styles.quickActionLabel}>PIN</Text>
-                                            </TouchableOpacity>
-                                        )}
-                                    </View>
-
-                                    <TouchableOpacity onPress={handleSwitchAccount} style={styles.switchBtn}>
-                                        <Text style={styles.switchText}>Ganti Akun / Logout</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            )}
-                        </Animated.View>
-                    </KeyboardAvoidingView>
-                </ScrollView>
-            )}
+                            {/* Google Button */}
+                            <View style={{ alignItems: 'center' }}>
+                                <TouchableOpacity onPress={handleGoogleLogin} style={styles.iconBtn}>
+                                    <MaterialCommunityIcons name="google" size={26} color="#4285F4" />
+                                </TouchableOpacity>
+                                <Text style={styles.iconLabel}>Owner</Text>
+                            </View>
+                        </View>
+                    </Animated.View>
+                </KeyboardAvoidingView>
+            </ScrollView>
 
             {/* PIN Modal */}
             <Portal>
@@ -502,6 +459,13 @@ export default function LoginScreen() {
                     </Button>
                 </Modal>
             </Portal>
+
+            {/* Loading Overlay if needed */}
+            {initializing && (
+                <View style={styles.loadingOverlay}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+            )}
         </View>
     );
 }
@@ -511,25 +475,6 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: colors.background,
         position: 'relative',
-        overflow: 'hidden',
-    },
-    watermarkContainer: {
-        ...StyleSheet.absoluteFillObject,
-        transform: [{ rotate: '-15deg' }, { scale: 1.5 }],
-        top: -100,
-        left: -100,
-        zIndex: 0,
-    },
-    watermarkRow: {
-        flexDirection: 'row',
-        marginBottom: 80,
-    },
-    watermarkLogoItem: {
-        width: 60,
-        height: 60,
-        marginRight: 80,
-        // tintColor: '#000',
-        opacity: 0.07,
     },
     headerDecoration: {
         position: 'absolute',
@@ -557,6 +502,7 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         flexGrow: 1,
+        paddingBottom: 40,
     },
     keyboardView: {
         flex: 1,
@@ -632,6 +578,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: spacing.lg,
+        marginTop: spacing.md,
     },
     divider: {
         flex: 1,
@@ -672,31 +619,6 @@ const styles = StyleSheet.create({
         marginTop: 4,
         fontWeight: '500',
     },
-    unlockContainer: {
-        alignItems: 'center',
-    },
-    quickActions: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        marginBottom: spacing.xl,
-        gap: spacing.xl,
-    },
-    quickActionBtn: {
-        alignItems: 'center',
-    },
-    quickActionLabel: {
-        marginTop: 8,
-        fontSize: 12,
-        color: colors.textSecondary,
-        fontWeight: '600',
-    },
-    switchBtn: {
-        marginTop: spacing.md,
-    },
-    switchText: {
-        color: colors.error,
-        fontWeight: '600',
-    },
     pinModal: {
         backgroundColor: 'white',
         padding: spacing.xl,
@@ -719,4 +641,11 @@ const styles = StyleSheet.create({
         width: '100%',
         borderRadius: 12,
     },
+    loadingOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(255,255,255,0.8)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+    }
 });
