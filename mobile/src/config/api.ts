@@ -1,31 +1,19 @@
 // d:\AHMAD MUZAYYIN\ChikoAttendance\mobile\src\config\api.ts
 import axios from 'axios';
 
-// Konfigurasi URL API
-// Ganti IP ini dengan IP laptop Anda (IPv4 dari ipconfig)
-// Gunakan 192.168.1.2 jika HP dan Laptop di Wi-Fi yang sama
-// Gunakan 10.0.2.2 jika menggunakan Emulator Android di Laptop
 export const API_CONFIG = {
-    // PENTING: Ganti sesuai environment Anda
-    // Emulator Android: Gunakan 10.0.2.2
-    // =================================================================
-    // KONFIGURASI IP ADDRESS (Pilih Salah Satu)
-    // =================================================================
-
     // 1. DEVELOPMENT (Expo Go / Emulator)
-    BASE_URL: 'http://192.168.0.100:3000/api',
+    // BASE_URL: 'http://192.168.1.231:3000/api',
 
     // 2. PRODUCTION (VPS / Hosting)
     // Ganti dengan IP VPS atau Domain Anda saat build APK
-    // BASE_URL: 'http://34.50.89.217/api', 
+    BASE_URL: 'http://34.50.89.217/api',
 
     TIMEOUT: 15000,
     GOOGLE_CLIENT_IDS: {
-        // PERHATIAN: Ini untuk Package 'com.chiko.attendance'
-        // Jika pakai Expo Go, gunakan Client ID 'host.exp.exponent'
-        ANDROID: '513383800762-6254d965o78840ucneb3qt0r9g3rudad.apps.googleusercontent.com',
-        IOS: '513383800762-6254d965o78840ucneb3qt0r9g3rudad.apps.googleusercontent.com',
-        WEB: '513383800762-6254d965o78840ucneb3qt0r9g3rudad.apps.googleusercontent.com',
+        ANDROID: '255748235220-d824oiok9fj3ad5l5a8h4152d4cvq0dq.apps.googleusercontent.com',
+        WEB: '255748235220-1bs742posq9cu07m3udjtdr2f8mddkb3.apps.googleusercontent.com',
+        IOS: '',
     },
     EXPO_REDIRECT_URI: 'https://auth.expo.io/@amue07/chiko-attendance'
 };

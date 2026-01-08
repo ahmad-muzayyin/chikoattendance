@@ -2,7 +2,7 @@
   "expo": {
     "name": "Chiko Absensi",
     "slug": "chiko-attendance",
-    "scheme": "chiko-attendance",
+    "scheme": "com.chiko.attendance",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -40,6 +40,11 @@
       ],
       "@react-native-community/datetimepicker"
     ],
-    "newArchEnabled": false
+    "newArchEnabled": false,
+    "extra": {
+      "eas": {
+        "projectId": "0c277e4c-50cb-4331-a6d0-fb9c11201c94"
+      }
+    }
   }
 }

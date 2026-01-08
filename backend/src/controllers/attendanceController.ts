@@ -652,3 +652,94 @@ export const getMonthlyHistory = async (req: AuthRequest, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+// Get Leaderboard Data
+export const getLeaderboard = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+        const { month, year } = req.query;
+        const now = new Date();
+        const currentYear = year ? parseInt(year as string) : now.getFullYear();
+        const currentMonth = month ? parseInt(month as string) : now.getMonth() + 1; // 1-12
+
+        const startOfMonth = new Date(currentYear, currentMonth - 1, 1);
+        const endOfMonth = new Date(currentYear, currentMonth, 0, 23, 59, 59);
+
+        // Fetch all branches with their employees
+        const branches = await Branch.findAll({
+            include: [{
+                model: User,
+                attributes: ['id', 'name', 'role', 'profile_picture'],
+                where: {
+                    role: { [Op.notIn]: [UserRole.OWNER, UserRole.SUPERVISOR] } // Exclude Owners/Supervisors
+                },
+                required: false
+            }]
+        });
+
+        const result = [];
+
+        for (const branch of branches) {
+            const employees = (branch as any).Users || [];
+            if (employees.length === 0) continue;
+
+            const branchStats = [];
+
+            for (const emp of employees) {
+                const attendances = await Attendance.findAll({
+                    where: {
+                        userId: emp.id,
+                        type: AttendanceType.CHECK_IN,
+                        timestamp: {
+                            [Op.between]: [startOfMonth, endOfMonth]
+                        }
+                    }
+                });
+
+                const presentCount = attendances.length;
+                const lateCount = attendances.filter(a => a.isLate).length;
+
+                // Scoring: Present (+10), Late Penalty (-5)
+                // Net for late day: 10 - 5 = 5 pts
+                // Net for on-time day: 10 pts
+                const finalScore = (presentCount * 10) - (lateCount * 5);
+
+                const latePercentage = presentCount > 0 ? (lateCount / presentCount) * 100 : 0;
+
+                branchStats.push({
+                    id: emp.id,
+                    name: emp.name,
+                    photo: emp.profile_picture,
+                    present: presentCount,
+                    late: lateCount,
+                    score: finalScore,
+                    latePercentage
+                });
+            }
+
+            // FILTER: Only show people with at least 1 attendance for 'Best'
+            const activeStaff = branchStats.filter(s => s.present > 0);
+
+            // Best: Highest Score
+            const best = [...activeStaff].sort((a, b) => b.score - a.score).slice(0, 3);
+
+            // Worst: Lowest Score (but maybe prioritize Late Count?)
+            // Let's sort by 'Most Late' primarily for 'Worst' category
+            const worst = [...activeStaff].sort((a, b) => b.late - a.late).slice(0, 3);
+
+            result.push({
+                branchName: branch.name,
+                best: best,
+                worst: worst
+            });
+        }
+
+        res.json(result);
+
+    } catch (error) {
+        console.error('Get Leaderboard Error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};

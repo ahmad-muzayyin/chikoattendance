@@ -318,6 +318,19 @@ export default function HomeScreen() {
                             />
                         </View>
                     )}
+
+                    {/* Leaderboard - Visible to All (Motivation) */}
+                    <View style={[styles.row, { marginTop: user?.role === 'OWNER' ? spacing.md : 0 }]}>
+                        <QuickAction
+                            icon="trophy-award"
+                            title="Leaderboard"
+                            subtitle="Top Karyawan"
+                            color="#EAB308" // Gold
+                            onPress={() => navigation.navigate('Leaderboard')}
+                        />
+                        {/* Placeholder for balance/alignment */}
+                        <View style={{ flex: 1 }} />
+                    </View>
                 </View>
 
                 {/* Quote / Info Card */}

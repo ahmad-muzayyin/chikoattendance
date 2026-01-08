@@ -24,6 +24,7 @@ export class Branch extends Model<BranchAttributes, BranchCreationAttributes> im
     public radius!: number;
     public startHour!: string;
     public endHour!: string;
+    public readonly Users?: import('./User').User[];
 
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;

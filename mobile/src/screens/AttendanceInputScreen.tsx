@@ -122,20 +122,56 @@ export default function AttendanceInputScreen() {
 
         } catch (error: any) {
             const resData = error?.response?.data;
-            if (error.response?.status === 400 && resData?.message?.includes('jangkauan')) {
-                setResultModal({
-                    visible: true,
-                    type: 'range',
-                    message: 'Diluar Jangkauan',
-                    data: { distance: resData.distance, max: resData.maxRadius }
-                });
-            } else {
-                setResultModal({
-                    visible: true,
-                    type: 'error',
-                    message: resData?.message || 'Server Error. Mohon hubungi admin.'
-                });
+            const status = error?.response?.status;
+            let title = 'Gagal Absen';
+            let msg = resData?.message || 'Terjadi kesalahan sistem. Mohon coba lagi.';
+
+            // NETWORK / SERVER DOWN
+            if (!error.response) {
+                msg = 'Koneksi gagal. Periksa internet Anda atau server sedang maintenance.';
             }
+            // 400 - BAD REQUEST (Logika Bisnis)
+            else if (status === 400) {
+                const lowerMsg = msg.toLowerCase();
+
+                if (lowerMsg.includes('jangkauan') || lowerMsg.includes('radius') || lowerMsg.includes('too far')) {
+                    setResultModal({
+                        visible: true,
+                        type: 'range',
+                        message: 'Posisi Anda Diluar Radius Absensi',
+                        data: { distance: resData.distance, max: resData.maxRadius }
+                    });
+                    return; // Exit here as we used specific modal type
+                }
+
+                if (lowerMsg.includes('already') || lowerMsg.includes('sudah')) {
+                    msg = type === 'CHECK_IN' ? 'Anda sudah tercatat MASUK hari ini.' : 'Anda sudah tercatat PULANG hari ini.';
+                    title = 'Duplikat Absensi';
+                } else if (lowerMsg.includes('shift') || lowerMsg.includes('schedule')) {
+                    msg = 'Jadwal Shift tidak ditemukan atau belum saatnya absen.';
+                    title = 'Diluar Jadwal';
+                } else if (lowerMsg.includes('face') || lowerMsg.includes('wajah')) {
+                    msg = 'Wajah tidak terdeteksi dengan jelas. Pastikan pencahayaan cukup dan wajah terlihat.';
+                    title = 'Foto Tidak Valid';
+                }
+            }
+            // 403 - FORBIDDEN
+            else if (status === 403) {
+                msg = 'Akun Anda tidak berhak melakukan absensi ini. Hubungi atasan.';
+                title = 'Akses Ditolak';
+            }
+            // 500 - SERVER ERROR
+            else if (status >= 500) {
+                msg = 'Server sedang mengalami gangguan. Mohon tunggu sebentar dan coba lagi.';
+                title = 'Server Error';
+            }
+
+            setResultModal({
+                visible: true,
+                type: 'error',
+                message: `${title}\n\n${msg}`,
+                data: null
+            });
         } finally {
             setLoading(false);
         }

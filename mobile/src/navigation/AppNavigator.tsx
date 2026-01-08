@@ -28,10 +28,12 @@ import SettingsScreen from '../screens/SettingsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import SecuritySettingsScreen from '../screens/SecuritySettingsScreen';
 import BackupManagementScreen from '../screens/BackupManagementScreen';
+import PositionListScreen from '../screens/PositionListScreen';
 
 import OwnerRecapBranchScreen from '../screens/OwnerRecapBranchScreen';
 import OwnerRecapEmployeesScreen from '../screens/OwnerRecapEmployeesScreen';
 import OwnerRecapDetailScreen from '../screens/OwnerRecapDetailScreen';
+import LeaderboardScreen from '../screens/LeaderboardScreen';
 
 export type RootStackParamList = {
     Loading: undefined;
@@ -53,6 +55,8 @@ export type RootStackParamList = {
     OwnerRecapBranch: undefined;
     OwnerRecapEmployees: { branchId: any; branchName: string };
     OwnerRecapDetail: { userId: any; userName: string };
+    Leaderboard: undefined;
+    PositionList: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -175,6 +179,7 @@ export default function AppNavigator() {
                         <Stack.Screen name="BranchList" component={BranchListScreen} options={{ headerShown: true, title: 'Daftar Outlet' }} />
                         <Stack.Screen name="AddBranch" component={AddBranchScreen} options={{ headerShown: true, title: 'Pengaturan Outlet' }} />
                         <Stack.Screen name="UserList" component={UserListScreen} options={{ headerShown: true, title: 'Manajemen Pengguna' }} />
+                        <Stack.Screen name="PositionList" component={PositionListScreen} options={{ headerShown: true, title: 'Manajemen Posisi' }} />
                         <Stack.Screen name="UserForm" component={UserFormScreen} options={{ headerShown: true, title: 'Form Pengguna' }} />
                         <Stack.Screen name="EmployeeList" component={EmployeeListScreen} options={{ headerShown: true, title: 'Monitoring Karyawan' }} />
                         <Stack.Screen name="EmployeeDetail" component={EmployeeDetailScreen} options={{ headerShown: true, title: 'Laporan Kehadiran' }} />
@@ -193,6 +198,7 @@ export default function AppNavigator() {
                         <Stack.Screen name="SecuritySettings" component={SecuritySettingsScreen} options={{ headerShown: true, title: 'Keamanan' }} />
                         <Stack.Screen name="Points" component={PointsScreen} options={{ headerShown: true, title: 'Poin & Sanksi' }} />
                         <Stack.Screen name="BackupManagement" component={BackupManagementScreen} options={{ headerShown: true, title: 'Pencadangan Data' }} />
+                        <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ headerShown: false }} />
                     </Stack.Navigator>
                 </NavigationContainer>
             </PaperProvider>

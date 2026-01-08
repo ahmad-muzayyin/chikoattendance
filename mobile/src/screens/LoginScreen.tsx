@@ -11,6 +11,7 @@ import {
     ScrollView,
     Dimensions,
     Alert,
+    ActivityIndicator,
 } from 'react-native';
 import {
     TextInput,
@@ -50,6 +51,8 @@ export default function LoginScreen() {
     const [pinModalVisible, setPinModalVisible] = useState(false);
     const [inputPin, setInputPin] = useState('');
     const [isUnlockMode, setIsUnlockMode] = useState(false);
+    const [savedName, setSavedName] = useState('');
+    const [initializing, setInitializing] = useState(true);
 
     const shakeAnim = useRef(new Animated.Value(0)).current;
 
@@ -58,7 +61,6 @@ export default function LoginScreen() {
         iosClientId: API_CONFIG.GOOGLE_CLIENT_IDS.IOS,
         webClientId: API_CONFIG.GOOGLE_CLIENT_IDS.WEB,
         scopes: ['profile', 'email'],
-        redirectUri: API_CONFIG.EXPO_REDIRECT_URI,
     });
 
     useEffect(() => {
@@ -72,6 +74,7 @@ export default function LoginScreen() {
         setLoading(true);
         setError(null);
         try {
+            await clearOldCredentials();
             const { data } = await axios.post(`${API_CONFIG.BASE_URL}/auth/google/login`, {
                 idToken
             });
@@ -88,30 +91,51 @@ export default function LoginScreen() {
 
     useEffect(() => {
         const checkQuickLogin = async () => {
-            const bioHardware = await LocalAuthentication.hasHardwareAsync();
-            const bioEnabled = await SecureStore.getItemAsync('isBiometricEnabled');
-            const storedPin = await SecureStore.getItemAsync('userPin');
-            const token = await SecureStore.getItemAsync('authToken');
-            const savedEmail = await SecureStore.getItemAsync('userEmail');
-            const savedPassword = await SecureStore.getItemAsync('userPassword');
-            const hasCreds = !!(savedEmail && savedPassword);
+            try {
+                const bioHardware = await LocalAuthentication.hasHardwareAsync();
+                const bioEnabled = await SecureStore.getItemAsync('isBiometricEnabled');
+                const storedPin = await SecureStore.getItemAsync('userPin');
+                const token = await SecureStore.getItemAsync('authToken');
+                const savedEmail = await SecureStore.getItemAsync('userEmail');
+                const savedPassword = await SecureStore.getItemAsync('userPassword');
+                const name = await SecureStore.getItemAsync('userName');
 
-            setIsBioAvailable(bioHardware);
-            setIsBioEnabled(bioEnabled === 'true');
-            setHasPin(!!storedPin);
-            setIsUnlockMode(!!token || hasCreds);
+                const hasCreds = !!(savedEmail && savedPassword);
 
-            if (bioHardware && bioEnabled === 'true' && (token || hasCreds)) {
-                setTimeout(() => handleBiometricLogin(!!storedPin), 500);
+                setIsBioAvailable(bioHardware);
+                setIsBioEnabled(bioEnabled === 'true');
+                setHasPin(!!storedPin);
+
+                if (name) setSavedName(name);
+
+                const shouldUnlock = !!token || hasCreds;
+                setIsUnlockMode(shouldUnlock);
+
+                if (bioHardware && bioEnabled === 'true' && shouldUnlock) {
+                    // Delay slightly to let UI render name
+                    setTimeout(() => handleBiometricLogin(!!storedPin), 800);
+                }
+            } finally {
+                setInitializing(false);
             }
         };
         checkQuickLogin();
     }, []);
 
+    const clearOldCredentials = async () => {
+        await SecureStore.deleteItemAsync('authToken');
+        await SecureStore.deleteItemAsync('securedAuthToken');
+        await SecureStore.deleteItemAsync('isBiometricEnabled');
+        await SecureStore.deleteItemAsync('userPin');
+        await SecureStore.deleteItemAsync('userEmail');
+        await SecureStore.deleteItemAsync('userPassword');
+        await SecureStore.deleteItemAsync('userName');
+    };
+
     const handleBiometricLogin = async (pinExists: boolean = hasPin) => {
         try {
             const result = await LocalAuthentication.authenticateAsync({
-                promptMessage: 'Login dengan Biometrik',
+                promptMessage: `Login Biometrik ${savedName || 'Siap'}`,
                 cancelLabel: pinExists ? 'Gunakan PIN' : 'Gunakan Password',
             });
 
@@ -153,6 +177,17 @@ export default function LoginScreen() {
             setError('Mohon isi email dan password');
             return;
         }
+
+        // SMART CHECK: Only clear credentials if switching to A DIFFERENT account
+        const storedEmail = await SecureStore.getItemAsync('userEmail');
+        if (!manualEmail && emailFinal.trim().toLowerCase() !== storedEmail) {
+            await clearOldCredentials();
+        } else if (manualEmail && emailFinal.trim().toLowerCase() !== storedEmail) {
+            // If manual login and email is different, wipe old data
+            await clearOldCredentials();
+        }
+        // If email is same, keep biometric settings!
+
         setError('');
         setLoading(true);
         try {
@@ -193,8 +228,14 @@ export default function LoginScreen() {
                     });
 
                     // Update fresh data
-                    await SecureStore.setItemAsync('userName', data.name || 'User');
-                    if (data.role) await SecureStore.setItemAsync('userRole', data.role);
+                    // Handle variable response structure (data.name or data.user.name)
+                    const realName = data.name || data.user?.name || (data.email ? data.email.split('@')[0] : 'Owner');
+                    await SecureStore.setItemAsync('userName', realName);
+                    setSavedName(realName); // Update state so it shows correctly next time without reload
+
+                    if (data.role || data.user?.role) {
+                        await SecureStore.setItemAsync('userRole', data.role || data.user?.role);
+                    }
 
                     navigation.replace('MainTabs');
                     return; // Success
@@ -269,159 +310,168 @@ export default function LoginScreen() {
                 ))}
             </View>
 
-            {/* Header Decoration */}
-            <View style={styles.headerDecoration}>
-                <View style={[styles.circle, styles.circle1]} />
-                <View style={[styles.circle, styles.circle2]} />
-            </View>
+            {initializing ? (
+                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                    <Image source={require('../../assets/logo.png')} style={{ width: 100, height: 100, marginBottom: 20 }} resizeMode="contain" />
+                    <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+            ) : (
+                <View style={styles.headerDecoration}>
+                    <View style={[styles.circle, styles.circle1]} />
+                    <View style={[styles.circle, styles.circle2]} />
+                </View>
+            )}
 
-            <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-            >
-                <KeyboardAvoidingView
-                    style={styles.keyboardView}
-                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            {!initializing && (
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
                 >
-                    {/* Logo Section */}
-                    <View style={styles.logoSection}>
-                        <Image
-                            source={require('../../assets/logo.png')}
-                            style={styles.logo}
-                            resizeMode="contain"
-                        />
-                        <Text style={styles.welcomeText}>
-                            {isUnlockMode ? 'Buka Aplikasi' : 'Selamat Datang'}
-                        </Text>
-                        <Text style={styles.subtitleText}>
-                            {isUnlockMode
-                                ? 'Gunakan PIN atau Biometrik untuk melanjutkan'
-                                : 'Masuk ke akun Chiko Anda'}
-                        </Text>
-                    </View>
-
-                    {/* Form Section */}
-                    <Animated.View
-                        style={[
-                            styles.formCard,
-                            { transform: [{ translateX: shakeAnim }] }
-                        ]}
+                    <KeyboardAvoidingView
+                        style={styles.keyboardView}
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                     >
-                        {error && (
-                            <View style={styles.errorContainer}>
-                                <MaterialCommunityIcons name="alert-circle" size={20} color={colors.error} />
-                                <Text style={styles.errorText}>{error}</Text>
-                            </View>
-                        )}
+                        {/* Logo Section */}
+                        <View style={styles.logoSection}>
+                            <Image
+                                source={require('../../assets/logo.png')}
+                                style={styles.logo}
+                                resizeMode="contain"
+                            />
+                            <Text style={styles.welcomeText}>
+                                {isUnlockMode ? `Hai, ${savedName || 'User'}` : 'Selamat Datang'}
+                            </Text>
+                            <Text style={styles.subtitleText}>
+                                {isUnlockMode
+                                    ? 'Gunakan PIN atau Biometrik untuk melanjutkan'
+                                    : 'Masuk ke akun Chiko Anda'}
+                            </Text>
+                        </View>
 
-                        {!isUnlockMode && (
-                            <>
-                                <TextInput
-                                    label="Email"
-                                    value={email}
-                                    onChangeText={setEmail}
-                                    mode="outlined"
-                                    autoCapitalize="none"
-                                    keyboardType="email-address"
-                                    style={styles.input}
-                                    outlineStyle={styles.inputOutline}
-                                    left={<TextInput.Icon icon="email-outline" color={colors.textMuted} />}
-                                />
-
-                                <TextInput
-                                    label="Password"
-                                    value={password}
-                                    onChangeText={setPassword}
-                                    mode="outlined"
-                                    secureTextEntry={secureTextEntry}
-                                    style={styles.input}
-                                    outlineStyle={styles.inputOutline}
-                                    left={<TextInput.Icon icon="lock-outline" color={colors.textMuted} />}
-                                    right={
-                                        <TextInput.Icon
-                                            icon={secureTextEntry ? "eye-outline" : "eye-off-outline"}
-                                            onPress={() => setSecureTextEntry(!secureTextEntry)}
-                                            color={colors.textMuted}
-                                        />
-                                    }
-                                />
-
-                                <TouchableOpacity style={styles.forgotBtn}>
-                                    <Text style={styles.forgotText}>Lupa Password?</Text>
-                                </TouchableOpacity>
-
-                                <Button
-                                    mode="contained"
-                                    onPress={() => handleLogin()}
-                                    loading={loading}
-                                    disabled={loading}
-                                    style={styles.loginButton}
-                                    contentStyle={styles.loginButtonContent}
-                                >
-                                    Masuk
-                                </Button>
-
-                                <View style={styles.dividerContainer}>
-                                    <View style={styles.divider} />
-                                    <Text style={styles.dividerText}>Opsi Login Lain</Text>
-                                    <View style={styles.divider} />
+                        {/* Form Section */}
+                        <Animated.View
+                            style={[
+                                styles.formCard,
+                                { transform: [{ translateX: shakeAnim }] }
+                            ]}
+                        >
+                            {error && (
+                                <View style={styles.errorContainer}>
+                                    <MaterialCommunityIcons name="alert-circle" size={20} color={colors.error} />
+                                    <Text style={styles.errorText}>{error}</Text>
                                 </View>
+                            )}
 
-                                <View style={styles.quickAccessRow}>
-                                    <View style={{ alignItems: 'center' }}>
-                                        <TouchableOpacity onPress={() => handleBiometricLogin()} disabled={!isBioEnabled} style={[styles.iconBtn, !isBioEnabled && styles.iconBtnDisabled]}>
-                                            <MaterialCommunityIcons name="fingerprint" size={28} color={isBioEnabled ? colors.primary : colors.textMuted} />
-                                        </TouchableOpacity>
-                                        <Text style={[styles.iconLabel, !isBioEnabled && { color: colors.textMuted }]}>Bio</Text>
+                            {!isUnlockMode && (
+                                <>
+                                    <TextInput
+                                        label="Email"
+                                        value={email}
+                                        onChangeText={setEmail}
+                                        placeholder="ck@chiko.com"
+                                        mode="outlined"
+                                        autoCapitalize="none"
+                                        keyboardType="email-address"
+                                        style={styles.input}
+                                        outlineStyle={styles.inputOutline}
+                                        left={<TextInput.Icon icon="email-outline" color={colors.textMuted} />}
+                                    />
+
+                                    <TextInput
+                                        label="Password"
+                                        value={password}
+                                        onChangeText={setPassword}
+                                        mode="outlined"
+                                        secureTextEntry={secureTextEntry}
+                                        style={styles.input}
+                                        outlineStyle={styles.inputOutline}
+                                        left={<TextInput.Icon icon="lock-outline" color={colors.textMuted} />}
+                                        right={
+                                            <TextInput.Icon
+                                                icon={secureTextEntry ? "eye-outline" : "eye-off-outline"}
+                                                onPress={() => setSecureTextEntry(!secureTextEntry)}
+                                                color={colors.textMuted}
+                                            />
+                                        }
+                                    />
+
+                                    <TouchableOpacity style={styles.forgotBtn}>
+                                        <Text style={styles.forgotText}>Lupa Password?</Text>
+                                    </TouchableOpacity>
+
+                                    <Button
+                                        mode="contained"
+                                        onPress={() => handleLogin()}
+                                        loading={loading}
+                                        disabled={loading}
+                                        style={styles.loginButton}
+                                        contentStyle={styles.loginButtonContent}
+                                    >
+                                        Masuk
+                                    </Button>
+
+                                    <View style={styles.dividerContainer}>
+                                        <View style={styles.divider} />
+                                        <Text style={styles.dividerText}>Opsi Login Lain</Text>
+                                        <View style={styles.divider} />
                                     </View>
-                                    <View style={{ alignItems: 'center' }}>
-                                        <TouchableOpacity onPress={() => setPinModalVisible(true)} disabled={!hasPin} style={[styles.iconBtn, !hasPin && styles.iconBtnDisabled]}>
-                                            <MaterialCommunityIcons name="numeric" size={28} color={hasPin ? colors.primary : colors.textMuted} />
-                                        </TouchableOpacity>
-                                        <Text style={[styles.iconLabel, !hasPin && { color: colors.textMuted }]}>PIN</Text>
+
+                                    <View style={styles.quickAccessRow}>
+                                        <View style={{ alignItems: 'center' }}>
+                                            <TouchableOpacity onPress={() => handleBiometricLogin()} disabled={!isBioEnabled} style={[styles.iconBtn, !isBioEnabled && styles.iconBtnDisabled]}>
+                                                <MaterialCommunityIcons name="fingerprint" size={28} color={isBioEnabled ? colors.primary : colors.textMuted} />
+                                            </TouchableOpacity>
+                                            <Text style={[styles.iconLabel, !isBioEnabled && { color: colors.textMuted }]}>Bio</Text>
+                                        </View>
+                                        <View style={{ alignItems: 'center' }}>
+                                            <TouchableOpacity onPress={() => setPinModalVisible(true)} disabled={!hasPin} style={[styles.iconBtn, !hasPin && styles.iconBtnDisabled]}>
+                                                <MaterialCommunityIcons name="numeric" size={28} color={hasPin ? colors.primary : colors.textMuted} />
+                                            </TouchableOpacity>
+                                            <Text style={[styles.iconLabel, !hasPin && { color: colors.textMuted }]}>PIN</Text>
+                                        </View>
+                                        <View style={{ alignItems: 'center' }}>
+                                            <TouchableOpacity onPress={handleGoogleLogin} style={styles.iconBtn}>
+                                                <MaterialCommunityIcons name="google" size={26} color="#4285F4" />
+                                            </TouchableOpacity>
+                                            <Text style={styles.iconLabel}>Owner</Text>
+                                        </View>
                                     </View>
-                                    <View style={{ alignItems: 'center' }}>
-                                        <TouchableOpacity onPress={handleGoogleLogin} style={styles.iconBtn}>
-                                            <MaterialCommunityIcons name="google" size={26} color="#4285F4" />
-                                        </TouchableOpacity>
-                                        <Text style={styles.iconLabel}>Owner</Text>
+                                </>
+                            )}
+
+                            {isUnlockMode && (
+                                <View style={styles.unlockContainer}>
+                                    <View style={styles.quickActions}>
+                                        {isBioAvailable && isBioEnabled && (
+                                            <TouchableOpacity
+                                                style={styles.quickActionBtn}
+                                                onPress={() => handleBiometricLogin()}
+                                            >
+                                                <MaterialCommunityIcons name="fingerprint" size={40} color={colors.primary} />
+                                                <Text style={styles.quickActionLabel}>Biometrik</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                        {hasPin && (
+                                            <TouchableOpacity
+                                                style={styles.quickActionBtn}
+                                                onPress={() => setPinModalVisible(true)}
+                                            >
+                                                <MaterialCommunityIcons name="numeric" size={40} color={colors.primary} />
+                                                <Text style={styles.quickActionLabel}>PIN</Text>
+                                            </TouchableOpacity>
+                                        )}
                                     </View>
+
+                                    <TouchableOpacity onPress={handleSwitchAccount} style={styles.switchBtn}>
+                                        <Text style={styles.switchText}>Ganti Akun / Logout</Text>
+                                    </TouchableOpacity>
                                 </View>
-                            </>
-                        )}
-
-                        {isUnlockMode && (
-                            <View style={styles.unlockContainer}>
-                                <View style={styles.quickActions}>
-                                    {isBioAvailable && isBioEnabled && (
-                                        <TouchableOpacity
-                                            style={styles.quickActionBtn}
-                                            onPress={() => handleBiometricLogin()}
-                                        >
-                                            <MaterialCommunityIcons name="fingerprint" size={40} color={colors.primary} />
-                                            <Text style={styles.quickActionLabel}>Biometrik</Text>
-                                        </TouchableOpacity>
-                                    )}
-                                    {hasPin && (
-                                        <TouchableOpacity
-                                            style={styles.quickActionBtn}
-                                            onPress={() => setPinModalVisible(true)}
-                                        >
-                                            <MaterialCommunityIcons name="numeric" size={40} color={colors.primary} />
-                                            <Text style={styles.quickActionLabel}>PIN</Text>
-                                        </TouchableOpacity>
-                                    )}
-                                </View>
-
-                                <TouchableOpacity onPress={handleSwitchAccount} style={styles.switchBtn}>
-                                    <Text style={styles.switchText}>Ganti Akun / Logout</Text>
-                                </TouchableOpacity>
-                            </View>
-                        )}
-                    </Animated.View>
-                </KeyboardAvoidingView>
-            </ScrollView>
+                            )}
+                        </Animated.View>
+                    </KeyboardAvoidingView>
+                </ScrollView>
+            )}
 
             {/* PIN Modal */}
             <Portal>

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { checkIn, checkOut, getCalendar, getRecap, getPoints, getDashboardStats, submitPermit, cancelPermit, getMonthlyHistory } from '../controllers/attendanceController';
+import { checkIn, checkOut, getCalendar, getRecap, getPoints, getDashboardStats, submitPermit, cancelPermit, getMonthlyHistory, getLeaderboard } from '../controllers/attendanceController';
 import { authenticateToken } from '../middleware/authMiddleware';
 
 const router = Router();
@@ -12,6 +12,7 @@ router.get('/calendar', authenticateToken, getCalendar);
 router.get('/recap', authenticateToken, getRecap);
 router.get('/history', authenticateToken, getMonthlyHistory);
 router.get('/points', authenticateToken, getPoints);
+router.get('/leaderboard', authenticateToken, getLeaderboard);
 router.get('/stats', authenticateToken, getDashboardStats);
 
 export default router;

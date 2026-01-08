@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { TextInput, Button, Text, SegmentedButtons, List, Surface, Portal, Dialog, Modal } from 'react-native-paper';
 import { CustomRadioButton, CustomAlert } from '../components';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
@@ -27,20 +27,20 @@ export default function UserFormScreen() {
 
     // Position Logic
     const [position, setPosition] = useState(editingUser?.position || '');
-    const COMMON_POSITIONS = ['Koki', 'Pelayan', 'Kasir', 'Barista', 'Helper', 'Admin', 'Supervisor'];
+    const [availablePositions, setAvailablePositions] = useState<any[]>([]);
 
     // Helper function to get icon for each position
     const getPositionIcon = (position: string) => {
-        const iconMap: { [key: string]: string } = {
-            'Koki': 'chef-hat',
-            'Pelayan': 'room-service',
-            'Kasir': 'cash-register',
-            'Barista': 'coffee',
-            'Helper': 'hand-heart',
-            'Admin': 'laptop',
-            'Supervisor': 'account-tie',
-        };
-        return iconMap[position] || 'briefcase';
+        const p = position.toLowerCase();
+        if (p.includes('koki') || p.includes('chef')) return 'chef-hat';
+        if (p.includes('pelayan') || p.includes('server')) return 'room-service';
+        if (p.includes('kasir')) return 'cash-register';
+        if (p.includes('barista')) return 'coffee';
+        if (p.includes('helper') || p.includes('bantu')) return 'hand-heart';
+        if (p.includes('admin')) return 'laptop';
+        if (p.includes('supervisor') || p.includes('head')) return 'account-tie';
+        if (p.includes('security') || p.includes('satpam')) return 'shield-account';
+        return 'briefcase';
     };
 
     const [showPositionDialog, setShowPositionDialog] = useState(false);
@@ -81,6 +81,12 @@ export default function UserFormScreen() {
         }
     }, [isHead]);
 
+    useFocusEffect(
+        React.useCallback(() => {
+            fetchPositions();
+        }, [])
+    );
+
     // Get selected branch name
     const selectedBranchName = isHead
         ? 'Cabang Saya' // Or fetch real name if needed, but 'Cabang Saya' is clear enough
@@ -107,6 +113,16 @@ export default function UserFormScreen() {
             });
             setShifts(res.data);
         } catch (e) { }
+    };
+
+    const fetchPositions = async () => {
+        try {
+            const token = await SecureStore.getItemAsync('authToken');
+            const res = await axios.get(`${API_CONFIG.BASE_URL}/positions`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setAvailablePositions(res.data);
+        } catch (e) { console.error(e); }
     };
 
     const handleSubmit = async () => {
@@ -353,7 +369,7 @@ export default function UserFormScreen() {
 
                         {/* Custom Input for Other Position */}
                         <View style={styles.modalContent}>
-                            {!COMMON_POSITIONS.includes(position) && (
+                            {(!availablePositions.find(p => p.name === position) && position !== '') && (
                                 <View style={styles.customInputContainer}>
                                     <TextInput
                                         label="Posisi Kustom"
@@ -368,20 +384,25 @@ export default function UserFormScreen() {
                                 </View>
                             )}
 
-                            <Text style={styles.sectionLabel}>Pilih posisi:</Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                <Text style={styles.sectionLabel}>Pilih posisi:</Text>
+                                <Button mode="text" compact onPress={() => { setShowPositionDialog(false); navigation.navigate('PositionList' as never); }}>
+                                    Kelola / Edit
+                                </Button>
+                            </View>
 
                             {/* CustomRadioButton */}
                             <ScrollView style={styles.radioScrollView} showsVerticalScrollIndicator={false}>
                                 <CustomRadioButton
                                     options={[
-                                        ...COMMON_POSITIONS.map(pos => ({
-                                            label: pos,
-                                            value: pos,
-                                            icon: getPositionIcon(pos),
+                                        ...availablePositions.map(pos => ({
+                                            label: pos.name,
+                                            value: pos.name,
+                                            icon: getPositionIcon(pos.name),
                                         })),
                                         { label: 'Lainnya / Custom', value: 'OTHER', icon: 'pencil-plus', description: 'Ketik posisi baru manual' }
                                     ]}
-                                    value={COMMON_POSITIONS.includes(position) ? position : 'OTHER'}
+                                    value={availablePositions.find(p => p.name === position) ? position : 'OTHER'}
                                     onSelect={(value) => {
                                         if (value === 'OTHER') {
                                             setPosition(''); // Clear to show input

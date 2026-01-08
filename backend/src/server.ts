@@ -9,6 +9,7 @@ import branchRoutes from './routes/branchRoutes';
 import adminRoutes from './routes/adminRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import shiftRoutes from './routes/shiftRoutes';
+import positionRoutes from './routes/positionRoutes';
 import { connectDB } from './config/db';
 import { User, UserRole } from './models/User';
 import { initAutoBackup } from './utils/backup';
@@ -46,6 +47,7 @@ app.use('/api/branches', branchRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/shifts', shiftRoutes);
+app.use('/api/positions', positionRoutes);
 
 // Test endpoint
 app.get('/api/ping', (req, res) => {
@@ -61,6 +63,21 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // Start Server
 const startServer = async () => {
     await connectDB();
+
+    // Seed default positions
+    try {
+        const { Position } = require('./models/Position');
+        const count = await Position.count();
+        if (count === 0) {
+            const defaults = ['Koki', 'Pelayan', 'Kasir', 'Barista', 'Helper', 'Admin', 'Supervisor'];
+            for (const name of defaults) {
+                await Position.create({ name });
+            }
+            console.log('✅ Seeded default positions');
+        }
+    } catch (e) {
+        console.error('Seeding positions error', e);
+    }
 
     // Auto-promote admin to OWNER
     try {
