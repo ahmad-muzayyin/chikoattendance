@@ -10,8 +10,11 @@ import { colors, spacing, borderRadius, shadows } from '../theme/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/AppNavigator';
+
 export default function EmployeeListScreen() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
     const isFocused = useIsFocused();
     const theme = useTheme();
     const [data, setData] = useState([]);
@@ -68,7 +71,7 @@ export default function EmployeeListScreen() {
     const renderItem = ({ item }: { item: any }) => (
         <TouchableOpacity
             activeOpacity={0.9}
-            onPress={() => navigation.navigate('EmployeeDetail' as any, { employee: { id: item.userId, name: item.name, role: item.role } })}
+            onPress={() => navigation.navigate('EmployeeDetail', { employee: { id: item.userId, name: item.name, role: item.role } })}
         >
             <Surface style={styles.card} elevation={2}>
                 <View style={styles.cardHeader}>
