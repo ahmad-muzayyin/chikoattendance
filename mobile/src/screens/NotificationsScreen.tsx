@@ -174,18 +174,24 @@ const styles = StyleSheet.create({
         backgroundColor: colors.background,
     },
     header: {
-        height: 60,
+        height: 110, // Taller header
         backgroundColor: colors.primary,
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-end', // Align content to bottom
         justifyContent: 'space-between',
-        paddingHorizontal: 4,
-        elevation: 4,
+        paddingHorizontal: 8,
+        paddingBottom: 12,
+        elevation: 6,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
     },
     headerTitle: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: 'bold',
         color: 'white',
+        marginBottom: 8, // Align with buttons
     },
     center: {
         flex: 1,

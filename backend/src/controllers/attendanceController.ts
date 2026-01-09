@@ -121,18 +121,22 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
         if (userRole === UserRole.HEAD) {
             isLate = false;
         } else {
-            // Determine shift start time
-            let shiftStart = new Date();
+            // Determine shift start time in WIB context
             const startHourStr = shift?.startHour || branch?.startHour || '09:00';
-
             const [startHour, startMinute] = startHourStr.split(':').map(Number);
-            shiftStart.setHours(startHour, startMinute, 0, 0);
 
-            // Check if late (now > shiftStart)
-            if (now > shiftStart) {
+            // Get current time in WIB
+            const nowWIBString = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Jakarta', hour12: false, hour: '2-digit', minute: '2-digit' });
+            const [currentHour, currentMinute] = nowWIBString.split(':').map(Number);
+
+            const currentTotalMinutes = currentHour * 60 + currentMinute;
+            const shiftStartTotalMinutes = startHour * 60 + startMinute;
+
+            // Check if late (compare minutes)
+            if (currentTotalMinutes > shiftStartTotalMinutes) {
                 isLate = true;
                 // Calculate late duration in minutes
-                const lateDurationMinutes = (now.getTime() - shiftStart.getTime()) / (1000 * 60);
+                const lateDurationMinutes = currentTotalMinutes - shiftStartTotalMinutes;
 
                 // If late > 60 mins (1 hour), mark as Half Day
                 if (lateDurationMinutes > 60) {
@@ -267,16 +271,22 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
             }
         } else {
             // STAFF/OTHERS: Overtime if checkout > 3 hours after shift end
-            // Determine shift end time
-            let shiftEnd = new Date();
+            // Determine shift end time in WIB
             const endHourStr = shift?.endHour || branch?.endHour || '17:00';
-
             const [endHour, endMinute] = endHourStr.split(':').map(Number);
-            shiftEnd.setHours(endHour, endMinute, 0, 0);
+
+            // Get current time in WIB
+            const nowWIBString = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Jakarta', hour12: false, hour: '2-digit', minute: '2-digit' });
+            const [currentHour, currentMinute] = nowWIBString.split(':').map(Number);
+
+            const currentTotalMinutes = currentHour * 60 + currentMinute;
+            let shiftEndTotalMinutes = endHour * 60 + endMinute;
+
+            // Handle shift crossing midnight (e.g. ends 02:00) -> logic complex, assuming day shift for now
+            // If current < shiftEnd, maybe next day? Ignoring for simple MVP.
 
             // Logic: "melebihi 3 jam dari jam pulang maka itu terhitung lembur"
-            // 3 hours = 180 minutes
-            const diffMinutes = (now.getTime() - shiftEnd.getTime()) / (1000 * 60);
+            const diffMinutes = currentTotalMinutes - shiftEndTotalMinutes;
 
             if (diffMinutes > 180) {
                 isOvertime = true;
@@ -340,7 +350,13 @@ export const getCalendar = async (req: AuthRequest, res: Response) => {
             const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
 
             let status = 'onTime';
-            let timeStr = date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
+            // Force WIB Timezone for Display
+            let timeStr = date.toLocaleTimeString('id-ID', {
+                timeZone: 'Asia/Jakarta',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
             let notes = att.notes;
 
             if (att.type === AttendanceType.CHECK_IN) {

@@ -96,6 +96,10 @@ const startServer = async () => {
 
         // Initialize Auto Backup
         initAutoBackup();
+
+        // Initialize Scheduler (Alpha Check)
+        const { initScheduler } = require('./utils/scheduler');
+        initScheduler();
     });
 };
 
