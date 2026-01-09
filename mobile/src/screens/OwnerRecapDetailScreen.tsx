@@ -60,9 +60,11 @@ export default function OwnerRecapDetailScreen() {
         if (!groupedData[dateKey]) groupedData[dateKey] = { date: att.timestamp };
         if (att.type === 'CHECK_IN') {
             groupedData[dateKey].checkIn = att.timestamp;
+            groupedData[dateKey].checkInFormatted = att.timestampFormatted;
             groupedData[dateKey].isLate = att.isLate;
         } else {
             groupedData[dateKey].checkOut = att.timestamp;
+            groupedData[dateKey].checkOutFormatted = att.timestampFormatted;
         }
     });
 
@@ -133,14 +135,18 @@ export default function OwnerRecapDetailScreen() {
                                     <MaterialCommunityIcons name="clock-in" size={18} color={colors.success} />
                                     <View style={{ marginLeft: 10 }}>
                                         <Text style={styles.slotLabel}>Masuk</Text>
-                                        <Text style={styles.slotValue}>{item.checkIn ? new Date(item.checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--'}</Text>
+                                        <Text style={styles.slotValue}>
+                                            {item.checkInFormatted || (item.checkIn ? new Date(item.checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--')}
+                                        </Text>
                                     </View>
                                 </View>
                                 <View style={styles.timeSlot}>
                                     <MaterialCommunityIcons name="clock-out" size={18} color={colors.error} />
                                     <View style={{ marginLeft: 10 }}>
                                         <Text style={styles.slotLabel}>Pulang</Text>
-                                        <Text style={styles.slotValue}>{item.checkOut ? new Date(item.checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--'}</Text>
+                                        <Text style={styles.slotValue}>
+                                            {item.checkOutFormatted || (item.checkOut ? new Date(item.checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--')}
+                                        </Text>
                                     </View>
                                 </View>
                             </View>

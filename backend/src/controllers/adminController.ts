@@ -8,6 +8,14 @@ import { Shift } from '../models/Shift';
 import { Op } from 'sequelize';
 import bcrypt from 'bcrypt';
 
+// Helper: Format Time to WIB
+const formatToWIB = (date: Date) => {
+    return date.toLocaleTimeString('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        hour: '2-digit', minute: '2-digit', hour12: false
+    });
+};
+
 // Get all employees with attendance stats for current month
 export const getEmployees = async (req: Request, res: Response) => {
     try {
@@ -113,7 +121,16 @@ export const getEmployeeAttendance = async (req: Request, res: Response) => {
             order: [['timestamp', 'DESC']]
         });
 
-        res.json(attendances);
+        // Format times to WIB explicitly
+        const formattedData = attendances.map(att => {
+            const data = att.toJSON();
+            return {
+                ...data,
+                timestampFormatted: formatToWIB(att.timestamp)
+            };
+        });
+
+        res.json(formattedData);
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
@@ -167,8 +184,13 @@ export const getDailyMonitoring = async (req: Request, res: Response) => {
         // Merge data
         const monitoring = users.map(user => {
             const userAtt = attendances.filter(a => a.userId === user.id);
-            const checkIn = userAtt.find(a => a.type === 'CHECK_IN');
-            const checkOut = userAtt.find(a => a.type === 'CHECK_OUT');
+            // Sort by time just in case to be sure
+            userAtt.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+            const checkIn = userAtt.find(a => a.type === 'CHECK_IN'); // First Check-in is correct
+            // BUG FIX: Take the LAST check-out (pop), not the first one (find)
+            const checkOuts = userAtt.filter(a => a.type === 'CHECK_OUT');
+            const checkOut = checkOuts.length > 0 ? checkOuts[checkOuts.length - 1] : undefined;
 
             // Calculate total points
             const userPunishments = punishments.filter(p => p.userId === user.id);
@@ -181,8 +203,18 @@ export const getDailyMonitoring = async (req: Request, res: Response) => {
                 role: user.role,
                 branch: (user as any).Branch?.name || '-',
                 status: checkIn ? (checkIn.isLate ? 'Telat' : 'Hadir') : 'Belum Hadir',
+                // Send raw timestamp AND formatted string to ensure Owner sees correct WIB time
                 checkInTime: checkIn ? checkIn.timestamp : null,
                 checkOutTime: checkOut ? checkOut.timestamp : null,
+                checkInTimeFormatted: checkIn ? formatToWIB(checkIn.timestamp) : '-',
+                checkOutTimeFormatted: checkOut ? formatToWIB(checkOut.timestamp) : '-',
+
+                // OVERRIDE: If frontend uses checkOutTime directly as text
+                // Let's rely on frontend using Formatted if available, or force valid ISO with timezone adjustment?
+                // Safest bet: Let's assume frontend parses ISO. If Owner sees 17:00 (UTC+5??), maybe Server Timezone issue.
+                // FORCE: Send formatting instructions or pre-formatted string in a generic field 'timeDisplay'
+                timeDisplay: checkIn ? formatToWIB(checkIn.timestamp) : '-',
+                outTimeDisplay: checkOut ? formatToWIB(checkOut.timestamp) : '-',
                 notes: checkIn?.notes,
                 photoUrl: checkIn?.photoUrl,
                 totalPoints,
