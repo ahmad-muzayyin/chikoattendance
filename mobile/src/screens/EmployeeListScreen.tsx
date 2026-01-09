@@ -139,14 +139,14 @@ export default function EmployeeListScreen() {
                     <View style={styles.timeBox}>
                         <Text style={styles.timeLabel}>Check In</Text>
                         <Text style={[styles.timeValue, { color: item.checkInTime ? colors.textPrimary : colors.textMuted }]}>
-                            {item.checkInTime ? new Date(item.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                            {item.checkInTimeFormatted || (item.checkInTime ? new Date(item.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--')}
                         </Text>
                     </View>
                     <View style={styles.verticalDivider} />
                     <View style={styles.timeBox}>
                         <Text style={styles.timeLabel}>Check Out</Text>
                         <Text style={[styles.timeValue, { color: item.checkOutTime ? colors.textPrimary : colors.textMuted }]}>
-                            {item.checkOutTime ? new Date(item.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                            {item.checkOutTimeFormatted || (item.checkOutTime ? new Date(item.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--')}
                         </Text>
                     </View>
                 </View>

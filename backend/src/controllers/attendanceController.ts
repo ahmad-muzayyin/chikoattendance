@@ -240,6 +240,43 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
         const now = new Date();
         let isOvertime = false;
 
+        // Validation: Prevent Multiple Check-Outs per Day
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const existingCheckOut = await Attendance.findOne({
+            where: {
+                userId,
+                type: AttendanceType.CHECK_OUT,
+                timestamp: {
+                    [Op.gte]: today,
+                    [Op.lt]: tomorrow
+                }
+            }
+        });
+
+        if (existingCheckOut) {
+            return res.status(400).json({ message: 'Anda sudah melakukan Check-out hari ini. Data tidak dapat diubah.' });
+        }
+
+        // Validation: Must Have Checked-In Today
+        const existingCheckIn = await Attendance.findOne({
+            where: {
+                userId,
+                type: AttendanceType.CHECK_IN,
+                timestamp: {
+                    [Op.gte]: today,
+                    [Op.lt]: tomorrow
+                }
+            }
+        });
+
+        if (!existingCheckIn) {
+            return res.status(400).json({ message: 'Anda belum melakukan Absensi Masuk hari ini.' });
+        }
+
         // KEPALA TOKO (HEAD): Overtime if worked > 8 hours
         if (user.role === UserRole.HEAD) {
             // Find today's Check-In

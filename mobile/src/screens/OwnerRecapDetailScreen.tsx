@@ -59,12 +59,18 @@ export default function OwnerRecapDetailScreen() {
         const dateKey = new Date(att.timestamp).toLocaleDateString('id-ID');
         if (!groupedData[dateKey]) groupedData[dateKey] = { date: att.timestamp };
         if (att.type === 'CHECK_IN') {
+            // For Check-IN: Since data is DESC (latest first), we want the execution to overwrite until the last one (earliest time).
+            // So 'always overwrite' is correct for finding the earliest Check-In.
             groupedData[dateKey].checkIn = att.timestamp;
             groupedData[dateKey].checkInFormatted = att.timestampFormatted;
             groupedData[dateKey].isLate = att.isLate;
         } else {
-            groupedData[dateKey].checkOut = att.timestamp;
-            groupedData[dateKey].checkOutFormatted = att.timestampFormatted;
+            // For Check-OUT: We want the LATEST time (first one in DESC array).
+            // So ONLY set if not already set.
+            if (!groupedData[dateKey].checkOut) {
+                groupedData[dateKey].checkOut = att.timestamp;
+                groupedData[dateKey].checkOutFormatted = att.timestampFormatted;
+            }
         }
     });
 

@@ -154,93 +154,106 @@ export default function AttendanceInputScreen() {
             return;
         }
 
-        setLoading(true);
-        try {
-            const token = await SecureStore.getItemAsync('authToken');
-            const endpoint = type === 'CHECK_IN' ? ENDPOINTS.CHECK_IN : ENDPOINTS.CHECK_OUT;
-
-            const res = await axios.post(
-                `${API_CONFIG.BASE_URL}${endpoint}`,
+        // Confirmation Dialog
+        Alert.alert(
+            `Konfirmasi ${type === 'CHECK_IN' ? 'Check-In' : 'Check-Out'}`,
+            `Anda akan melakukan absensi ${type === 'CHECK_IN' ? 'MASUK' : 'PULANG'}.\n\nPastikan data sudah benar karena tidak dapat diubah (Hanya 1x sehari).`,
+            [
+                { text: 'Batal', style: 'cancel' },
                 {
-                    latitude: location.coords.latitude,
-                    longitude: location.coords.longitude,
-                    deviceId: 'MOBILE_APP',
-                    photoUrl: photo,
-                    notes: notes
-                },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+                    text: 'Ya, Kirim',
+                    onPress: async () => {
+                        setLoading(true);
+                        try {
+                            const token = await SecureStore.getItemAsync('authToken');
+                            const endpoint = type === 'CHECK_IN' ? ENDPOINTS.CHECK_IN : ENDPOINTS.CHECK_OUT;
 
-            // Personalised Success Messages
-            let successTitle = type === 'CHECK_IN' ? 'Absensi Masuk Berhasil' : 'Absensi Pulang Berhasil';
-            let successMsg = type === 'CHECK_IN'
-                ? 'Selamat bekerja! Semangat untuk hari ini.'
-                : 'Terima kasih atas kerja kerasmu hari ini. Hati-hati di jalan!';
+                            const res = await axios.post(
+                                `${API_CONFIG.BASE_URL}${endpoint}`,
+                                {
+                                    latitude: location.coords.latitude,
+                                    longitude: location.coords.longitude,
+                                    deviceId: 'MOBILE_APP',
+                                    photoUrl: photo,
+                                    notes: notes
+                                },
+                                { headers: { Authorization: `Bearer ${token}` } }
+                            );
 
-            setResultModal({
-                visible: true,
-                type: 'success',
-                message: successMsg,
-                data: res.data
-            });
+                            // Personalised Success Messages
+                            let successTitle = type === 'CHECK_IN' ? 'Absensi Masuk Berhasil' : 'Absensi Pulang Berhasil';
+                            let successMsg = type === 'CHECK_IN'
+                                ? 'Selamat bekerja! Semangat untuk hari ini.'
+                                : 'Terima kasih atas kerja kerasmu hari ini. Hati-hati di jalan!';
 
-        } catch (error: any) {
-            const resData = error?.response?.data;
-            const status = error?.response?.status;
-            let title = 'Gagal Absen';
-            let msg = resData?.message || 'Terjadi kesalahan sistem. Mohon coba lagi.';
+                            setResultModal({
+                                visible: true,
+                                type: 'success',
+                                message: successMsg,
+                                data: res.data
+                            });
 
-            // NETWORK / SERVER DOWN
-            if (!error.response) {
-                msg = 'Gagal terhubung ke server. Periksa koneksi internet Anda.';
-            }
-            // 400 - BAD REQUEST (Logika Bisnis)
-            else if (status === 400) {
-                const lowerMsg = msg.toLowerCase();
+                        } catch (error: any) {
+                            const resData = error?.response?.data;
+                            const status = error?.response?.status;
+                            let title = 'Gagal Absen';
+                            let msg = resData?.message || 'Terjadi kesalahan sistem. Mohon coba lagi.';
 
-                if (lowerMsg.includes('jangkauan') || lowerMsg.includes('radius') || lowerMsg.includes('too far')) {
-                    setResultModal({
-                        visible: true,
-                        type: 'range',
-                        message: 'Lokasi Anda Terlalu Jauh dari Outlet',
-                        data: { distance: resData.distance, max: resData.maxRadius }
-                    });
-                    return;
+                            // NETWORK / SERVER DOWN
+                            if (!error.response) {
+                                msg = 'Gagal terhubung ke server. Periksa koneksi internet Anda.';
+                            }
+                            // 400 - BAD REQUEST (Logika Bisnis)
+                            else if (status === 400) {
+                                const lowerMsg = msg.toLowerCase();
+
+                                if (lowerMsg.includes('jangkauan') || lowerMsg.includes('radius') || lowerMsg.includes('too far')) {
+                                    setResultModal({
+                                        visible: true,
+                                        type: 'range',
+                                        message: 'Lokasi Anda Terlalu Jauh dari Outlet',
+                                        data: { distance: resData.distance, max: resData.maxRadius }
+                                    });
+                                    return;
+                                }
+
+                                if (lowerMsg.includes('already') || lowerMsg.includes('sudah')) {
+                                    msg = type === 'CHECK_IN'
+                                        ? 'Anda sudah melakukan absensi MASUK hari ini.'
+                                        : 'Anda sudah melakukan absensi PULANG hari ini.';
+                                    title = 'Absensi Duplikat';
+                                } else if (lowerMsg.includes('shift') || lowerMsg.includes('schedule')) {
+                                    msg = 'Tidak ada jadwal shift yang aktif saat ini. Hubungi supervisor jika jadwal tidak sesuai.';
+                                    title = 'Diluar Jadwal';
+                                } else if (lowerMsg.includes('face') || lowerMsg.includes('wajah')) {
+                                    msg = 'Wajah tidak terdeteksi dengan jelas di foto. Mohon foto ulang di tempat terang.';
+                                    title = 'Wajah Tidak Terdeteksi';
+                                }
+                            }
+                            // 403 - FORBIDDEN
+                            else if (status === 403) {
+                                msg = 'Akun Anda tidak memiliki izin untuk melakukan absensi ini.';
+                                title = 'Akses Ditolak';
+                            }
+                            // 500 - SERVER ERROR
+                            else if (status >= 500) {
+                                msg = 'Server sedang sibuk atau mengalami gangguan. Mohon coba beberapa saat lagi.';
+                                title = 'Gangguan Server';
+                            }
+
+                            setResultModal({
+                                visible: true,
+                                type: 'error',
+                                message: `${title}\n\n${msg}`,
+                                data: null
+                            });
+                        } finally {
+                            setLoading(false);
+                        }
+                    }
                 }
-
-                if (lowerMsg.includes('already') || lowerMsg.includes('sudah')) {
-                    msg = type === 'CHECK_IN'
-                        ? 'Anda sudah melakukan absensi MASUK hari ini.'
-                        : 'Anda sudah melakukan absensi PULANG hari ini.';
-                    title = 'Absensi Duplikat';
-                } else if (lowerMsg.includes('shift') || lowerMsg.includes('schedule')) {
-                    msg = 'Tidak ada jadwal shift yang aktif saat ini. Hubungi supervisor jika jadwal tidak sesuai.';
-                    title = 'Diluar Jadwal';
-                } else if (lowerMsg.includes('face') || lowerMsg.includes('wajah')) {
-                    msg = 'Wajah tidak terdeteksi dengan jelas di foto. Mohon foto ulang di tempat terang.';
-                    title = 'Wajah Tidak Terdeteksi';
-                }
-            }
-            // 403 - FORBIDDEN
-            else if (status === 403) {
-                msg = 'Akun Anda tidak memiliki izin untuk melakukan absensi ini.';
-                title = 'Akses Ditolak';
-            }
-            // 500 - SERVER ERROR
-            else if (status >= 500) {
-                msg = 'Server sedang sibuk atau mengalami gangguan. Mohon coba beberapa saat lagi.';
-                title = 'Gangguan Server';
-            }
-
-            setResultModal({
-                visible: true,
-                type: 'error',
-                message: `${title}\n\n${msg}`,
-                data: null
-            });
-        } finally {
-            setLoading(false);
-        }
+            ]
+        );
     };
 
     if (!permission?.granted) {
