@@ -692,7 +692,7 @@ export const getMonthlyHistory = async (req: AuthRequest, res: Response) => {
                     const durationHours = (end - start) / (1000 * 60 * 60);
 
                     if (durationHours < 7.9) { // Tolerance for small ms discrepancies
-                        const msg = `⚠️ Kurang Jam Kerja (${durationHours.toFixed(1)}/8 Jam)`;
+                        const msg = `Durasi Kurang 8 jam (${durationHours.toFixed(1)}jam)`;
 
                         // Append to check-out notes for visibility
                         if (record.checkOut) {
