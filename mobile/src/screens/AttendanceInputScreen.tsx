@@ -14,6 +14,20 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
+// Helper: Haversine Distance (Meters)
+function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+    const R = 6371; // Radius of the earth in km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const d = R * c; // Distance in km
+    return d * 1000; // Returns meters
+}
+
 export default function AttendanceInputScreen() {
     const navigation = useNavigation();
     const isFocused = useIsFocused();
@@ -28,6 +42,10 @@ export default function AttendanceInputScreen() {
     const [notes, setNotes] = useState('');
     const [loading, setLoading] = useState(false);
     const [statusMessage, setStatusMessage] = useState('Menginisialisasi GPS...');
+
+    // Branch Detection
+    const [branches, setBranches] = useState<any[]>([]);
+    const [detectedOutlet, setDetectedOutlet] = useState<string | null>(null); // "nama outlet" or null
 
     // Result Modals
     const [resultModal, setResultModal] = useState<{ visible: boolean, type: 'success' | 'error' | 'range', message: string, data?: any }>({
@@ -45,6 +63,21 @@ export default function AttendanceInputScreen() {
                 setStatusMessage('Izin lokasi diperlukan.');
             }
         })();
+
+        // Fetch Branches for detection
+        const fetchBranches = async () => {
+            try {
+                const token = await SecureStore.getItemAsync('authToken');
+                if (!token) return;
+                const { data } = await axios.get(`${API_CONFIG.BASE_URL}/branches`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                setBranches(data);
+            } catch (error) {
+                console.log('Failed to fetch branches for location check');
+            }
+        };
+        fetchBranches();
     }, []);
 
     const getLocation = async () => {
@@ -65,7 +98,32 @@ export default function AttendanceInputScreen() {
             }
 
             setLocation(loc);
-            setStatusMessage('Lokasi terkunci akurat.');
+
+            // Detect Nearest Branch
+            if (branches.length > 0) {
+                const { latitude, longitude } = loc.coords;
+                let nearest: any = null;
+                let minDistance = Infinity;
+
+                branches.forEach((b: any) => {
+                    const dist = getDistanceFromLatLonInKm(latitude, longitude, parseFloat(b.latitude), parseFloat(b.longitude));
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        nearest = b;
+                    }
+                });
+
+                const radius = nearest?.radius || 100;
+                if (nearest && minDistance <= radius) {
+                    setDetectedOutlet(nearest.name);
+                    setStatusMessage(`Terdeteksi di: ${nearest.name} (${Math.floor(minDistance)}m)`);
+                } else {
+                    setDetectedOutlet(null);
+                    setStatusMessage(`Di luar area outlet. Terdekat: ${nearest?.name || '-'} (${Math.floor(minDistance)}m)`);
+                }
+            } else {
+                setStatusMessage('Lokasi terkunci akurat.');
+            }
         } catch (e) {
             setStatusMessage('GPS Error. Coba lagi.');
         }
@@ -212,7 +270,19 @@ export default function AttendanceInputScreen() {
                     <View style={styles.headerContent}>
                         <MaterialCommunityIcons name="store-marker" size={28} color="rgba(255,255,255,0.9)" />
                         <Text style={styles.headerTitle}>Absensi Outlet</Text>
-                        <Text style={styles.headerSubtitle}>{user?.branch?.name || 'Toko Pusat'}</Text>
+
+                        {/* Lokasi Tugas (Seharusnya) */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 }}>
+                            <MaterialCommunityIcons name="briefcase-outline" size={14} color="white" style={{ marginRight: 6 }} />
+                            <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>
+                                Tugas: {user?.branch?.name || 'Outlet Pusat'}
+                            </Text>
+                        </View>
+
+                        {/* Lokasi Terdeteksi GPS */}
+                        <Text style={styles.headerSubtitle}>
+                            {detectedOutlet ? `📍 Posisi: ${detectedOutlet}` : (statusMessage.includes('Melacak') ? '📡 Melacak Lokasi...' : '❌ Di Luar Outlet')}
+                        </Text>
                     </View>
                 </LinearGradient>
                 <View style={styles.curvedBottom} />
@@ -413,11 +483,13 @@ const styles = StyleSheet.create({
         zIndex: 1,
     },
     header: {
-        height: 180,
-        paddingTop: 50,
+        height: 240, // Increased from 180 to fit new content
+        paddingTop: 60,
+        paddingBottom: 40,
         paddingHorizontal: 24,
         position: 'relative',
         overflow: 'hidden',
+        justifyContent: 'center', // Center content vertically
     },
     decorativeCircle1: {
         position: 'absolute',

@@ -40,27 +40,43 @@ export const useAuth = () => {
                 // Set default header
                 axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
-                // Try to get cached role & name first for instant UI
+                // Try to get cached role, name & branch for instant UI
                 const userName = await SecureStore.getItemAsync('userName');
                 const userRole = await SecureStore.getItemAsync('userRole');
+                const userBranchName = await SecureStore.getItemAsync('userBranchName');
 
                 setState({
                     isLoading: false,
                     isAuthenticated: true,
                     token,
-                    user: { id: 0, name: userName || 'User', role: userRole || 'EMPLOYEE' },
+                    user: {
+                        id: 0,
+                        name: userName || 'User',
+                        role: userRole || 'EMPLOYEE',
+                        branch: userBranchName ? { id: 0, name: userBranchName } : undefined
+                    },
                 });
 
                 // Then background fetch for validation & latest data
                 try {
                     const res = await axios.get(`${API_CONFIG.BASE_URL}/auth/me`);
+
+                    // Frontend Normalization: Handle Branch (uppercase) vs branch (lowercase)
+                    const userData = res.data;
+                    if (userData.Branch && !userData.branch) {
+                        userData.branch = userData.Branch;
+                    }
+
                     setState(prev => ({
                         ...prev,
-                        user: res.data
+                        user: userData
                     }));
                     // Update cache
                     await SecureStore.setItemAsync('userRole', res.data.role || 'EMPLOYEE');
                     await SecureStore.setItemAsync('userName', res.data.name || 'User');
+                    if (res.data.branch?.name) {
+                        await SecureStore.setItemAsync('userBranchName', res.data.branch.name);
+                    }
                 } catch (e) {
                     console.log('Token validation failed', e);
                     // Optional: logout if token invalid
@@ -95,6 +111,9 @@ export const useAuth = () => {
             await SecureStore.setItemAsync('authToken', data.token);
             await SecureStore.setItemAsync('userName', data.user?.name || 'User');
             await SecureStore.setItemAsync('userRole', data.user?.role || 'EMPLOYEE');
+            if (data.user?.branch?.name) {
+                await SecureStore.setItemAsync('userBranchName', data.user.branch.name);
+            }
 
             axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
 

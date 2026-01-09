@@ -114,66 +114,69 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
         // 3. Late Logic
         const now = new Date();
         let isLate = false;
-
-        // Determine shift start time
-        let shiftStart = new Date();
-        const startHourStr = shift?.startHour || branch?.startHour || '09:00';
-
-        const [startHour, startMinute] = startHourStr.split(':').map(Number);
-        shiftStart.setHours(startHour, startMinute, 0, 0);
-
-        // Check if late (now > shiftStart)
         let isHalfDay = false;
         let warningMessage = '';
 
-        // Check if late (now > shiftStart)
-        if (now > shiftStart) {
-            isLate = true;
-            // Calculate late duration in minutes
-            const lateDurationMinutes = (now.getTime() - shiftStart.getTime()) / (1000 * 60);
+        // KEPALA TOKO (HEAD): Flexible time, never late
+        if (userRole === UserRole.HEAD) {
+            isLate = false;
+        } else {
+            // Determine shift start time
+            let shiftStart = new Date();
+            const startHourStr = shift?.startHour || branch?.startHour || '09:00';
 
-            // If late > 60 mins (1 hour), mark as Half Day
-            if (lateDurationMinutes > 60) {
-                isHalfDay = true;
-            }
+            const [startHour, startMinute] = startHourStr.split(':').map(Number);
+            shiftStart.setHours(startHour, startMinute, 0, 0);
 
-            try {
-                // Determine penalty
-                const penaltyPoints = 5;
-                await Punishment.create({
-                    userId,
-                    points: penaltyPoints,
-                    reason: `Terlambat ${Math.floor(lateDurationMinutes)} menit. Jadwal: ${branch?.startHour || '09:00'}`,
-                    date: now
-                });
+            // Check if late (now > shiftStart)
+            if (now > shiftStart) {
+                isLate = true;
+                // Calculate late duration in minutes
+                const lateDurationMinutes = (now.getTime() - shiftStart.getTime()) / (1000 * 60);
 
-                // Check total lates this month to trigger Warning
-                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-                const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-                const lateCount = await Attendance.count({
-                    where: {
-                        userId,
-                        type: AttendanceType.CHECK_IN,
-                        isLate: true,
-                        timestamp: {
-                            [Op.between]: [startOfMonth, endOfMonth]
-                        }
-                    }
-                });
-
-                // currentLateCount matches (lateCount before this insert) + 1? 
-                // We create attendance AFTER this block. So lateCount is N. This will be N+1.
-                // Requirement: "jika lebih dari 5 hari maka akan ada tulisan... pengurangan gaji 50K"
-                // So if (lateCount + 1) > 5.
-                if (lateCount + 1 > 5) {
-                    warningMessage = `PERINGATAN: Anda terlambat > 5 kali bulan ini (${lateCount + 1}x). Gaji dipotong Rp 50.000.`;
-                    // Log for "Notification to Kepala Toko"
-                    console.log(`[NOTIF CAFE] KARYAWAN ${user.name} SUDAH TELAT ${lateCount + 1} KALI.`);
+                // If late > 60 mins (1 hour), mark as Half Day
+                if (lateDurationMinutes > 60) {
+                    isHalfDay = true;
                 }
 
-            } catch (punishmentError) {
-                console.error('Failed to create automatic punishment:', punishmentError);
+                try {
+                    // Determine penalty
+                    const penaltyPoints = 5;
+                    await Punishment.create({
+                        userId,
+                        points: penaltyPoints,
+                        reason: `Terlambat ${Math.floor(lateDurationMinutes)} menit. Jadwal: ${branch?.startHour || '09:00'}`,
+                        date: now
+                    });
+
+                    // Check total lates this month to trigger Warning
+                    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+                    const lateCount = await Attendance.count({
+                        where: {
+                            userId,
+                            type: AttendanceType.CHECK_IN,
+                            isLate: true,
+                            timestamp: {
+                                [Op.between]: [startOfMonth, endOfMonth]
+                            }
+                        }
+                    });
+
+                    // currentLateCount matches (lateCount before this insert) + 1? 
+                    // We create attendance AFTER this block. So lateCount is N. This will be N+1.
+                    // Requirement: "jika lebih dari 5 hari maka akan ada tulisan... pengurangan gaji 50K"
+                    // So if (lateCount + 1) > 5.
+                    if (lateCount + 1 > 5) {
+                        warningMessage = `PERINGATAN: Anda terlambat > 5 kali bulan ini (${lateCount + 1}x). Gaji dipotong Rp 50.000.`;
+                        // Log for "Notification to Kepala Toko"
+                        console.log(`[NOTIF CAFE] KARYAWAN ${user.name} SUDAH TELAT ${lateCount + 1} KALI.`);
+                    }
+
+                } catch (punishmentError) {
+                    console.error('Failed to create automatic punishment:', punishmentError);
+                }
             }
         }
 
@@ -233,19 +236,51 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
         const now = new Date();
         let isOvertime = false;
 
-        // Determine shift end time
-        let shiftEnd = new Date();
-        const endHourStr = shift?.endHour || branch?.endHour || '17:00';
+        // KEPALA TOKO (HEAD): Overtime if worked > 8 hours
+        if (user.role === UserRole.HEAD) {
+            // Find today's Check-In
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
 
-        const [endHour, endMinute] = endHourStr.split(':').map(Number);
-        shiftEnd.setHours(endHour, endMinute, 0, 0);
+            const checkInRecord = await Attendance.findOne({
+                where: {
+                    userId,
+                    type: AttendanceType.CHECK_IN,
+                    timestamp: {
+                        [Op.gte]: today,
+                        [Op.lt]: tomorrow
+                    }
+                }
+            });
 
-        // Logic: "melebihi 3 jam dari jam pulang maka itu terhitung lembur"
-        // 3 hours = 180 minutes
-        const diffMinutes = (now.getTime() - shiftEnd.getTime()) / (1000 * 60);
+            if (checkInRecord) {
+                const checkInTime = new Date(checkInRecord.timestamp).getTime();
+                const checkOutTime = now.getTime();
+                const durationHours = (checkOutTime - checkInTime) / (1000 * 60 * 60);
 
-        if (diffMinutes > 180) {
-            isOvertime = true;
+                // If duration > 8 hours, it is overtime
+                if (durationHours > 8) {
+                    isOvertime = true;
+                }
+            }
+        } else {
+            // STAFF/OTHERS: Overtime if checkout > 3 hours after shift end
+            // Determine shift end time
+            let shiftEnd = new Date();
+            const endHourStr = shift?.endHour || branch?.endHour || '17:00';
+
+            const [endHour, endMinute] = endHourStr.split(':').map(Number);
+            shiftEnd.setHours(endHour, endMinute, 0, 0);
+
+            // Logic: "melebihi 3 jam dari jam pulang maka itu terhitung lembur"
+            // 3 hours = 180 minutes
+            const diffMinutes = (now.getTime() - shiftEnd.getTime()) / (1000 * 60);
+
+            if (diffMinutes > 180) {
+                isOvertime = true;
+            }
         }
 
         const attendance = await Attendance.create({
@@ -645,6 +680,30 @@ export const getMonthlyHistory = async (req: AuthRequest, res: Response) => {
 
         // Convert object to array sorted by date descending
         const history = Object.values(grouped).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        // Validate Work Duration for HEAD (Kepala Toko)
+        // Must work at least 8 hours
+        if (req.user?.role === UserRole.HEAD) {
+            history.forEach((record: any) => {
+                if (record.checkIn && record.checkOut) {
+                    const start = new Date(record.checkIn.timestamp).getTime();
+                    const end = new Date(record.checkOut.timestamp).getTime();
+
+                    const durationHours = (end - start) / (1000 * 60 * 60);
+
+                    if (durationHours < 7.9) { // Tolerance for small ms discrepancies
+                        const msg = `⚠️ Kurang Jam Kerja (${durationHours.toFixed(1)}/8 Jam)`;
+
+                        // Append to check-out notes for visibility
+                        if (record.checkOut) {
+                            record.checkOut.notes = record.checkOut.notes
+                                ? `${record.checkOut.notes} | ${msg}`
+                                : msg;
+                        }
+                    }
+                }
+            });
+        }
 
         res.json(history);
 
