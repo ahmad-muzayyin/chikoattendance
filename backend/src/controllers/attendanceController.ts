@@ -67,7 +67,7 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
             }
         }
         // STAFF/HEAD/OWNER: Check against assigned branch (if enforced)
-        else if (userRole !== UserRole.HEAD && userRole !== UserRole.OWNER) {
+        else if (userRole !== UserRole.OWNER) {
             if (!branch) {
                 return res.status(400).json({ message: 'Data Cabang tidak ditemukan untuk user ini.' });
             }
@@ -77,8 +77,8 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
                 { latitude: branch.latitude, longitude: branch.longitude }
             );
 
-            // Use branch radius or default to 50m if not set
-            const allowedRadius = branch.radius || 50;
+            // Use branch radius or default to 100m if not set
+            const allowedRadius = branch.radius || 100;
 
             if (dist > allowedRadius) {
                 return res.status(400).json({
@@ -239,6 +239,65 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
         const shift = user.Shift as Shift | null;
         const now = new Date();
         let isOvertime = false;
+
+        // Ensure coordinates
+        const lat = parseFloat(latitude);
+        const long = parseFloat(longitude);
+        if (isNaN(lat) || isNaN(long)) {
+            return res.status(400).json({ message: 'Invalid coordinates provided' });
+        }
+
+        // Location Validation
+        const userRole = user.role as UserRole;
+
+        // SUPERVISOR: Check against ALL branches
+        if (userRole === UserRole.SUPERVISOR) {
+            const allBranches = await Branch.findAll();
+            let isWithinRange = false;
+            let nearestDist = Infinity;
+
+            for (const b of allBranches) {
+                const dist = getDistance(
+                    { latitude: lat, longitude: long },
+                    { latitude: b.latitude, longitude: b.longitude }
+                );
+
+                if (dist <= (b.radius || 100)) {
+                    isWithinRange = true;
+                    break;
+                }
+                if (dist < nearestDist) nearestDist = dist;
+            }
+
+            if (!isWithinRange) {
+                return res.status(400).json({
+                    message: 'Anda tidak berada di lokasi outlet manapun.',
+                    nearestDistance: nearestDist
+                });
+            }
+        }
+        // STAFF/HEAD: Check against assigned branch (OWNER excluded)
+        else if (userRole !== UserRole.OWNER) {
+            if (!branch) {
+                return res.status(400).json({ message: 'Data Cabang tidak ditemukan untuk user ini.' });
+            }
+
+            const dist = getDistance(
+                { latitude: lat, longitude: long },
+                { latitude: branch.latitude, longitude: branch.longitude }
+            );
+
+            // Use branch radius or default to 100m
+            const allowedRadius = branch.radius || 100;
+
+            if (dist > allowedRadius) {
+                return res.status(400).json({
+                    message: 'Di luar jangkauan outlet/cabang. Tidak dapat Check-Out.',
+                    distance: dist,
+                    maxRadius: allowedRadius
+                });
+            }
+        }
 
         // Validation: Prevent Multiple Check-Outs per Day
         const today = new Date();
