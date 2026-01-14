@@ -3,7 +3,7 @@ import axios from 'axios';
 
 export const API_CONFIG = {
     // 1. DEVELOPMENT (Expo Go / Emulator)
-    // BASE_URL: 'http://192.168.1.4:3000/api',
+    // BASE_URL: 'http://192.168.1.46:3000/api',
 
     // 2. PRODUCTION (VPS / Hosting)
     // Ganti dengan IP VPS atau Domain Anda saat build APK

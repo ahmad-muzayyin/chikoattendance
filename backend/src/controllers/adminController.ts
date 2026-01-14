@@ -118,16 +118,70 @@ export const getEmployeeAttendance = async (req: Request, res: Response) => {
                     [Op.lte]: endOfMonth
                 }
             },
-            order: [['timestamp', 'DESC']]
+            order: [['timestamp', 'ASC']]
         });
 
-        // Format times to WIB explicitly
-        const formattedData = attendances.map(att => {
-            const data = att.toJSON();
-            return {
-                ...data,
-                timestampFormatted: formatToWIB(att.timestamp)
-            };
+        // Group by date and separate CHECK_IN/CHECK_OUT
+        const groupedByDate: any = {};
+
+        attendances.forEach(att => {
+            const dateKey = att.timestamp.toISOString().split('T')[0]; // YYYY-MM-DD
+
+            if (!groupedByDate[dateKey]) {
+                groupedByDate[dateKey] = {
+                    date: dateKey,
+                    checkIn: null,
+                    checkOut: null,
+                    checkInPhoto: null,
+                    checkOutPhoto: null,
+                    checkInLocation: null,
+                    checkOutLocation: null,
+                    checkInNotes: null,
+                    checkOutNotes: null,
+                    checkInFormatted: null,
+                    checkOutFormatted: null,
+                    isLate: false,
+                    events: [] // For ALPHA, PERMIT, SICK
+                };
+            }
+
+            const attData = att.toJSON();
+
+            if (attData.type === 'CHECK_IN') {
+                groupedByDate[dateKey].checkIn = attData.timestamp;
+                groupedByDate[dateKey].checkInPhoto = attData.photoUrl;
+                groupedByDate[dateKey].checkInLocation = {
+                    lat: attData.latitude,
+                    lng: attData.longitude
+                };
+                groupedByDate[dateKey].checkInNotes = attData.notes;
+                groupedByDate[dateKey].checkInFormatted = formatToWIB(attData.timestamp);
+                groupedByDate[dateKey].isLate = attData.isLate;
+            } else if (attData.type === 'CHECK_OUT') {
+                groupedByDate[dateKey].checkOut = attData.timestamp;
+                groupedByDate[dateKey].checkOutPhoto = attData.photoUrl;
+                groupedByDate[dateKey].checkOutLocation = {
+                    lat: attData.latitude,
+                    lng: attData.longitude
+                };
+                groupedByDate[dateKey].checkOutNotes = attData.notes;
+                groupedByDate[dateKey].checkOutFormatted = formatToWIB(attData.timestamp);
+                groupedByDate[dateKey].isOvertime = attData.isOvertime;
+                groupedByDate[dateKey].isHalfDay = attData.isHalfDay;
+            } else {
+                // ALPHA, PERMIT, SICK
+                groupedByDate[dateKey].events.push({
+                    type: attData.type,
+                    timestamp: attData.timestamp,
+                    notes: attData.notes,
+                    photoUrl: attData.photoUrl
+                });
+            }
+        });
+
+        // Convert to array and sort by date descending
+        const formattedData = Object.values(groupedByDate).sort((a: any, b: any) => {
+            return new Date(b.date).getTime() - new Date(a.date).getTime();
         });
 
         res.json(formattedData);

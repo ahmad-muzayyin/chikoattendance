@@ -103,27 +103,76 @@ export default function EmployeeDetailScreen() {
                     {loading ? (
                         <ActivityIndicator style={{ marginTop: 20 }} color={colors.primary} />
                     ) : (
-                        attendanceHistory.map((item: any) => (
-                            <Surface key={item.id} style={styles.historyCard} elevation={0}>
-                                <View style={styles.historyRow}>
-                                    <View style={[styles.typeIndicator, { backgroundColor: item.type === 'CHECK_IN' ? colors.primary : '#64748B' }]}>
-                                        <MaterialCommunityIcons name={item.type === 'CHECK_IN' ? 'login' : 'logout'} size={16} color="#FFF" />
+                        attendanceHistory.map((item: any) => {
+                            // Determine type info
+                            let typeColor = colors.primary;
+                            let typeIcon = 'login';
+                            let typeLabel = 'Check In';
+
+                            if (item.type === 'CHECK_OUT') {
+                                typeColor = '#64748B';
+                                typeIcon = 'logout';
+                                typeLabel = 'Check Out';
+                            } else if (item.type === 'PERMIT') {
+                                typeColor = '#F59E0B';
+                                typeIcon = 'file-document-outline';
+                                typeLabel = 'Izin';
+                            } else if (item.type === 'SICK') {
+                                typeColor = '#8B5CF6';
+                                typeIcon = 'medical-bag';
+                                typeLabel = 'Sakit';
+                            } else if (item.type === 'ALPHA') {
+                                typeColor = colors.error;
+                                typeIcon = 'alert-circle';
+                                typeLabel = 'Alpha (Tidak Hadir)';
+                            }
+
+                            return (
+                                <Surface key={item.id} style={styles.historyCard} elevation={0}>
+                                    <View style={styles.historyRow}>
+                                        <View style={[styles.typeIndicator, { backgroundColor: typeColor }]}>
+                                            <MaterialCommunityIcons name={typeIcon as any} size={16} color="#FFF" />
+                                        </View>
+                                        <View style={{ flex: 1, marginLeft: 12 }}>
+                                            <Text style={styles.historyDate}>{new Date(item.timestamp).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
+                                            <Text style={styles.historyTime}>
+                                                {item.type !== 'ALPHA' ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' • ' : ''}
+                                                {typeLabel}
+                                            </Text>
+
+                                            {/* Status Tags */}
+                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }}>
+                                                {item.isLate && <Text style={styles.warningTag}>🔔 TERLAMBAT</Text>}
+                                                {item.isOvertime && <Text style={styles.overtimeTag}>⏰ LEMBUR</Text>}
+                                                {item.isHalfDay && <Text style={styles.halfDayTag}>⚠️ SETENGAH HARI</Text>}
+                                                {item.type === 'ALPHA' && <Text style={styles.alphaTag}>🚫 AUTO SISTEM (-20 POIN)</Text>}
+                                            </View>
+                                        </View>
+                                        <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
                                     </View>
-                                    <View style={{ flex: 1, marginLeft: 12 }}>
-                                        <Text style={styles.historyDate}>{new Date(item.timestamp).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
-                                        <Text style={styles.historyTime}>{new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {item.type}</Text>
-                                        {item.isLate && <Text style={styles.lateTag}>TERLAMBAT</Text>}
-                                    </View>
-                                    <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
-                                </View>
-                                {item.notes && (
-                                    <View style={styles.notesBox}>
-                                        <Text style={styles.notesText}>{item.notes}</Text>
-                                    </View>
-                                )}
-                                <Divider style={{ marginTop: 12 }} />
-                            </Surface>
-                        ))
+
+                                    {/* Notes/Description */}
+                                    {item.notes && (
+                                        <View style={styles.notesBox}>
+                                            <MaterialCommunityIcons name="information-outline" size={14} color={colors.textSecondary} style={{ marginRight: 4 }} />
+                                            <Text style={styles.notesText}>{item.notes}</Text>
+                                        </View>
+                                    )}
+
+                                    {/* Special Alpha Description */}
+                                    {item.type === 'ALPHA' && !item.notes && (
+                                        <View style={[styles.notesBox, { backgroundColor: '#FEE2E2' }]}>
+                                            <MaterialCommunityIcons name="alert-circle-outline" size={14} color={colors.error} style={{ marginRight: 4 }} />
+                                            <Text style={[styles.notesText, { color: colors.error }]}>
+                                                Karyawan tidak melakukan absensi. Sistem otomatis menandai sebagai Alpha dengan sanksi 20 poin.
+                                            </Text>
+                                        </View>
+                                    )}
+
+                                    <Divider style={{ marginTop: 12 }} />
+                                </Surface>
+                            );
+                        })
                     )}
                     {attendanceHistory.length === 0 && !loading && (
                         <View style={styles.emptyBox}>
@@ -196,9 +245,13 @@ const styles = StyleSheet.create({
     typeIndicator: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
     historyDate: { fontSize: 14, fontWeight: '600' },
     historyTime: { fontSize: 12, color: colors.textSecondary },
+    warningTag: { fontSize: 10, fontWeight: 'bold', color: colors.error, backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginRight: 6, marginBottom: 4 },
+    overtimeTag: { fontSize: 10, fontWeight: 'bold', color: '#059669', backgroundColor: '#D1FAE5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginRight: 6, marginBottom: 4 },
+    halfDayTag: { fontSize: 10, fontWeight: 'bold', color: colors.warning, backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginRight: 6, marginBottom: 4 },
+    alphaTag: { fontSize: 10, fontWeight: 'bold', color: colors.error, backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginRight: 6, marginBottom: 4 },
     lateTag: { fontSize: 10, fontWeight: 'bold', color: colors.error, marginTop: 2 },
-    notesBox: { marginTop: 8, backgroundColor: '#F8FAFC', padding: 8, borderRadius: 8, marginLeft: 44 },
-    notesText: { fontSize: 12, fontStyle: 'italic', color: colors.textSecondary },
+    notesBox: { marginTop: 8, backgroundColor: '#F8FAFC', padding: 8, borderRadius: 8, marginLeft: 44, flexDirection: 'row', alignItems: 'flex-start' },
+    notesText: { fontSize: 12, fontStyle: 'italic', color: colors.textSecondary, flex: 1 },
     emptyBox: { alignItems: 'center', marginTop: 40 },
     emptyText: { color: colors.textMuted, marginTop: 10 },
     modal: { backgroundColor: 'white', padding: 25, margin: 20, borderRadius: 25 },

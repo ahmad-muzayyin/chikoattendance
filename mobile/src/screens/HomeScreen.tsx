@@ -264,11 +264,17 @@ export default function HomeScreen() {
 
                     <View style={styles.row}>
                         <QuickAction
-                            icon="calendar-check"
-                            title="Kalender"
-                            subtitle="Riwayat Absen"
+                            icon={user?.role === 'OWNER' ? "clipboard-list" : "calendar-check"}
+                            title={user?.role === 'OWNER' ? "Monitoring Absensi" : "Kalender"}
+                            subtitle={user?.role === 'OWNER' ? "Status Kehadiran" : "Riwayat Absen"}
                             color={colors.primary}
-                            onPress={() => navigation.navigate('AttendanceCalendar')}
+                            onPress={() => {
+                                if (user?.role === 'OWNER') {
+                                    navigation.navigate('EmployeeList');
+                                } else {
+                                    navigation.navigate('AttendanceCalendar');
+                                }
+                            }}
                         />
                         <QuickAction
                             icon="file-document-outline"
@@ -287,11 +293,17 @@ export default function HomeScreen() {
 
                     <View style={styles.row}>
                         <QuickAction
-                            icon="star-face"
-                            title="Poin Saya"
-                            subtitle="Prestasi & Sanksi"
+                            icon={user?.role === 'OWNER' ? "medal" : "star-face"}
+                            title={user?.role === 'OWNER' ? "Poin Karyawan" : "Poin Saya"}
+                            subtitle={user?.role === 'OWNER' ? "Total Poin Tim" : "Prestasi & Sanksi"}
                             color={colors.warning}
-                            onPress={() => navigation.navigate('Points')}
+                            onPress={() => {
+                                if (user?.role === 'OWNER') {
+                                    navigation.navigate('Leaderboard');
+                                } else {
+                                    navigation.navigate('Points');
+                                }
+                            }}
                         />
                         <QuickAction
                             icon="account-cog"

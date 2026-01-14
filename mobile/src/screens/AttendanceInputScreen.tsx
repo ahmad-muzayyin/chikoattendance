@@ -11,6 +11,7 @@ import { API_CONFIG, ENDPOINTS } from '../config/api';
 import { colors, spacing, borderRadius, shadows } from '../theme/theme';
 import { useAuth } from '../hooks/useAuth';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MapView, { Marker, Circle, PROVIDER_DEFAULT } from 'react-native-maps';
 
 const { width } = Dimensions.get('window');
 
@@ -46,6 +47,7 @@ export default function AttendanceInputScreen() {
     // Branch Detection
     const [branches, setBranches] = useState<any[]>([]);
     const [detectedOutlet, setDetectedOutlet] = useState<string | null>(null); // "nama outlet" or null
+    const [nearestBranch, setNearestBranch] = useState<any>(null); // For Map Visualization
 
     // Result Modals
     const [resultModal, setResultModal] = useState<{ visible: boolean, type: 'success' | 'error' | 'range', message: string, data?: any }>({
@@ -112,6 +114,8 @@ export default function AttendanceInputScreen() {
                         nearest = b;
                     }
                 });
+
+                setNearestBranch(nearest); // Store for Map Visualization
 
                 const radius = nearest?.radius || 100;
                 if (nearest && minDistance <= radius) {

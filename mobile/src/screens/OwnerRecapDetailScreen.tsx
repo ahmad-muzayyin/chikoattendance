@@ -1,7 +1,7 @@
 // d:\AHMAD MUZAYYIN\ChikoAttendance\mobile\src\screens\OwnerRecapDetailScreen.tsx
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Dimensions, TouchableOpacity } from 'react-native';
-import { Text, Surface, ActivityIndicator, Button, Portal, Dialog, RadioButton } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, RefreshControl, Dimensions, TouchableOpacity, Image } from 'react-native';
+import { Text, Surface, ActivityIndicator, Button, Portal, Dialog, RadioButton, Modal } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
@@ -27,6 +27,11 @@ export default function OwnerRecapDetailScreen() {
     const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
     const [tempMonth, setTempMonth] = useState(month);
     const [tempYear, setTempYear] = useState(year);
+    const [photoModal, setPhotoModal] = useState<{ visible: boolean, photoUrl: string | null, data: any }>({
+        visible: false,
+        photoUrl: null,
+        data: null
+    });
 
     const fetchAttendance = async () => {
         setLoading(true);
@@ -37,6 +42,7 @@ export default function OwnerRecapDetailScreen() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (Array.isArray(res.data)) {
+                console.log('📸 Attendance Data Sample:', JSON.stringify(res.data[0], null, 2));
                 setAttendances(res.data);
             } else {
                 setAttendances([]);
@@ -116,48 +122,145 @@ export default function OwnerRecapDetailScreen() {
                         <Text style={styles.emptySubtitle}>Tidak ada absensi untuk periode {months[month - 1]} {year}</Text>
                     </View>
                 ) : (
-                    items.map((item: any, index) => (
-                        <Surface key={index} style={styles.itemCard} elevation={1}>
-                            <View style={styles.cardHeader}>
-                                <View style={styles.dateBadge}>
-                                    <Text style={styles.dateDayText}>{new Date(item.date).getDate()}</Text>
-                                    <Text style={styles.dateMonthText}>{months[new Date(item.date).getMonth()].substring(0, 3)}</Text>
-                                </View>
-                                <View style={styles.cardInfo}>
-                                    <Text style={styles.dayText}>
-                                        {new Date(item.date).toLocaleDateString('id-ID', { weekday: 'long' })}
-                                    </Text>
-                                    <Text style={styles.fullDateText}>
-                                        {new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                                    </Text>
-                                </View>
-                                {item.isLate && <View style={styles.lateStatus}><Text style={styles.lateStatusText}>TERLAMBAT</Text></View>}
-                            </View>
+                    items.map((item: any, index) => {
+                        // Deteksi anomali: Ada check-out tapi tidak ada check-in
+                        const hasCheckOutOnly = !item.checkIn && item.checkOut;
 
-                            <View style={styles.cardDivider} />
+                        // Cek apakah check-out adalah Alpha marker (jam 23:55)
+                        let isAlphaCheckout = false;
+                        if (hasCheckOutOnly && item.checkOut) {
+                            const checkOutTime = new Date(item.checkOut);
+                            const hours = checkOutTime.getHours();
+                            const minutes = checkOutTime.getMinutes();
+                            isAlphaCheckout = (hours === 23 && minutes === 55);
+                        }
 
-                            <View style={styles.timeRow}>
-                                <View style={[styles.timeSlot, { borderRightWidth: 1, borderRightColor: colors.divider }]}>
-                                    <MaterialCommunityIcons name="clock-in" size={18} color={colors.success} />
-                                    <View style={{ marginLeft: 10 }}>
-                                        <Text style={styles.slotLabel}>Masuk</Text>
-                                        <Text style={styles.slotValue}>
-                                            {item.checkInFormatted || (item.checkIn ? new Date(item.checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--')}
+                        return (
+                            <Surface key={index} style={styles.itemCard} elevation={1}>
+                                <View style={styles.cardHeader}>
+                                    <View style={styles.dateBadge}>
+                                        <Text style={styles.dateDayText}>{new Date(item.date).getDate()}</Text>
+                                        <Text style={styles.dateMonthText}>{months[new Date(item.date).getMonth()].substring(0, 3)}</Text>
+                                    </View>
+                                    <View style={styles.cardInfo}>
+                                        <Text style={styles.dayText}>
+                                            {new Date(item.date).toLocaleDateString('id-ID', { weekday: 'long' })}
+                                        </Text>
+                                        <Text style={styles.fullDateText}>
+                                            {new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                                         </Text>
                                     </View>
-                                </View>
-                                <View style={styles.timeSlot}>
-                                    <MaterialCommunityIcons name="clock-out" size={18} color={colors.error} />
-                                    <View style={{ marginLeft: 10 }}>
-                                        <Text style={styles.slotLabel}>Pulang</Text>
-                                        <Text style={styles.slotValue}>
-                                            {item.checkOutFormatted || (item.checkOut ? new Date(item.checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--')}
-                                        </Text>
+                                    <View style={{ flexDirection: 'column', alignItems: 'flex-end' }}>
+                                        {item.isLate && <View style={styles.lateStatus}><Text style={styles.lateStatusText}>TERLAMBAT</Text></View>}
+                                        {hasCheckOutOnly && !isAlphaCheckout && (
+                                            <View style={[styles.anomalyBadge, { marginTop: item.isLate ? 4 : 0 }]}>
+                                                <Text style={styles.anomalyBadgeText}>🚫 DATA TIDAK VALID</Text>
+                                            </View>
+                                        )}
+                                        {isAlphaCheckout && (
+                                            <View style={[styles.alphaBadgeOwner, { marginTop: item.isLate ? 4 : 0 }]}>
+                                                <Text style={styles.alphaBadgeOwnerText}>🔴 ALPHA (SISTEM)</Text>
+                                            </View>
+                                        )}
                                     </View>
                                 </View>
-                            </View>
-                        </Surface>
-                    ))
+
+                                {/* Alert untuk berbagai kasus */}
+                                {isAlphaCheckout && (
+                                    <View style={[styles.anomalyAlert, { backgroundColor: '#FEE2E2' }]}>
+                                        <MaterialCommunityIcons name="alert-circle" size={14} color={colors.error} />
+                                        <Text style={styles.anomalyAlertText}>
+                                            Tidak absen sama sekali dalam sehari. Status ditandai otomatis oleh sistem pada jam 23:55.
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {hasCheckOutOnly && !isAlphaCheckout && (
+                                    <View style={styles.anomalyAlert}>
+                                        <MaterialCommunityIcons name="alert-octagon" size={14} color={colors.error} />
+                                        <Text style={styles.anomalyAlertText}>
+                                            Data tidak valid: Tercatat absen pulang tanpa absen masuk. Kemungkinan error sistem atau manipulasi data.
+                                        </Text>
+                                    </View>
+                                )}
+
+                                <View style={styles.cardDivider} />
+
+                                <View style={styles.timeRow}>
+                                    <View style={[styles.timeSlot, { borderRightWidth: 1, borderRightColor: colors.divider }]}>
+                                        <MaterialCommunityIcons name="clock-in" size={18} color={hasCheckOutOnly ? colors.textMuted : colors.success} />
+                                        <View style={{ marginLeft: 10 }}>
+                                            <Text style={styles.slotLabel}>Masuk</Text>
+                                            <Text style={[styles.slotValue, hasCheckOutOnly && styles.missingValue]}>
+                                                {item.checkInFormatted || (item.checkIn ? new Date(item.checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--')}
+                                            </Text>
+                                            {hasCheckOutOnly && <Text style={styles.missingLabel}>✗ Tidak ada</Text>}
+                                        </View>
+                                    </View>
+                                    <View style={styles.timeSlot}>
+                                        <MaterialCommunityIcons name="clock-out" size={18} color={colors.error} />
+                                        <View style={{ marginLeft: 10 }}>
+                                            <Text style={styles.slotLabel}>Pulang</Text>
+                                            <Text style={styles.slotValue}>
+                                                {item.checkOutFormatted || (item.checkOut ? new Date(item.checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--')}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </View>
+
+                                {/* Photo Buttons */}
+                                <View style={styles.photoButtonsRow}>
+                                    {/* Check-In Photo - Always show button */}
+                                    <TouchableOpacity
+                                        style={[styles.photoButton, { flex: 1, marginRight: 4 }]}
+                                        onPress={() => setPhotoModal({
+                                            visible: true,
+                                            photoUrl: item.checkInPhoto,
+                                            data: {
+                                                type: 'CHECK-IN',
+                                                time: item.checkIn,
+                                                location: item.checkInLocation,
+                                                notes: item.checkInNotes
+                                            }
+                                        })}
+                                    >
+                                        <MaterialCommunityIcons
+                                            name={item.checkInPhoto ? "camera" : "camera-off"}
+                                            size={16}
+                                            color={item.checkInPhoto ? colors.primary : colors.textMuted}
+                                        />
+                                        <Text style={[styles.photoButtonText, !item.checkInPhoto && { color: colors.textMuted }]}>
+                                            {item.checkIn ? 'Foto Masuk' : 'Tidak Masuk'}
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    {/* Check-Out Photo - Always show button */}
+                                    <TouchableOpacity
+                                        style={[styles.photoButton, { flex: 1, marginLeft: 4 }]}
+                                        onPress={() => setPhotoModal({
+                                            visible: true,
+                                            photoUrl: item.checkOutPhoto,
+                                            data: {
+                                                type: 'CHECK-OUT',
+                                                time: item.checkOut,
+                                                location: item.checkOutLocation,
+                                                notes: item.checkOutNotes
+                                            }
+                                        })}
+                                    >
+                                        <MaterialCommunityIcons
+                                            name={item.checkOutPhoto ? "camera" : "camera-off"}
+                                            size={16}
+                                            color={item.checkOutPhoto ? colors.error : colors.textMuted}
+                                        />
+                                        <Text style={[styles.photoButtonText, !item.checkOutPhoto && { color: colors.textMuted }]}>
+                                            {item.checkOut ? 'Foto Pulang' : 'Tidak Pulang'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </Surface>
+                        );
+                    })
                 )}
             </ScrollView>
 
@@ -207,6 +310,86 @@ export default function OwnerRecapDetailScreen() {
                         </Button>
                     </Dialog.Actions>
                 </Dialog>
+
+                {/* Photo Modal */}
+                <Modal
+                    visible={photoModal.visible}
+                    onDismiss={() => setPhotoModal({ visible: false, photoUrl: null, data: null })}
+                    contentContainerStyle={styles.photoModalContainer}
+                >
+                    <View style={styles.photoModalContent}>
+                        {/* Header */}
+                        <View style={styles.photoModalHeader}>
+                            <View style={[styles.photoTypeBadge, { backgroundColor: photoModal.data?.type === 'CHECK-IN' ? '#DCFCE7' : '#FEF2F2' }]}>
+                                <MaterialCommunityIcons
+                                    name={photoModal.data?.type === 'CHECK-IN' ? 'login' : 'logout'}
+                                    size={16}
+                                    color={photoModal.data?.type === 'CHECK-IN' ? colors.success : colors.error}
+                                />
+                                <Text style={[styles.photoTypeText, { color: photoModal.data?.type === 'CHECK-IN' ? colors.success : colors.error }]}>
+                                    {photoModal.data?.type}
+                                </Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setPhotoModal({ visible: false, photoUrl: null, data: null })}>
+                                <MaterialCommunityIcons name="close-circle" size={28} color={colors.textMuted} />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Photo */}
+                        {photoModal.photoUrl ? (
+                            <Image
+                                source={{ uri: photoModal.photoUrl }}
+                                style={styles.photoImage}
+                                resizeMode="contain"
+                            />
+                        ) : (
+                            <View style={styles.noPhotoView}>
+                                <MaterialCommunityIcons name="image-off" size={60} color={colors.textMuted} />
+                                <Text style={styles.noPhotoViewText}>Foto tidak tersedia</Text>
+                            </View>
+                        )}
+
+                        {/* Details */}
+                        <View style={styles.photoDetails}>
+                            <View style={styles.photoDetailRow}>
+                                <MaterialCommunityIcons name="clock-outline" size={18} color={colors.textSecondary} />
+                                <Text style={styles.photoDetailLabel}>Waktu:</Text>
+                                <Text style={styles.photoDetailValue}>
+                                    {photoModal.data?.time ? new Date(photoModal.data.time).toLocaleString('id-ID') : '-'}
+                                </Text>
+                            </View>
+
+                            {photoModal.data?.location && (
+                                <View style={styles.photoDetailRow}>
+                                    <MaterialCommunityIcons name="map-marker" size={18} color={colors.textSecondary} />
+                                    <Text style={styles.photoDetailLabel}>Lokasi:</Text>
+                                    <Text style={styles.photoDetailValue}>
+                                        {photoModal.data.location.lat?.toFixed(6)}, {photoModal.data.location.lng?.toFixed(6)}
+                                    </Text>
+                                </View>
+                            )}
+
+                            {photoModal.data?.notes && (
+                                <View style={[styles.photoDetailRow, { alignItems: 'flex-start' }]}>
+                                    <MaterialCommunityIcons name="note-text" size={18} color={colors.textSecondary} />
+                                    <Text style={styles.photoDetailLabel}>Catatan:</Text>
+                                    <Text style={[styles.photoDetailValue, { flex: 1 }]}>
+                                        {photoModal.data.notes}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        <Button
+                            mode="contained"
+                            onPress={() => setPhotoModal({ visible: false, photoUrl: null, data: null })}
+                            style={styles.photoCloseButton}
+                            labelStyle={{ fontWeight: 'bold' }}
+                        >
+                            Tutup
+                        </Button>
+                    </View>
+                </Modal>
             </Portal>
         </View>
     );
@@ -441,5 +624,159 @@ const styles = StyleSheet.create({
     applyBtn: {
         borderRadius: 12,
         paddingHorizontal: 20,
-    }
+    },
+    anomalyBadge: {
+        backgroundColor: '#FEF3C7',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    anomalyBadgeText: {
+        fontSize: 9,
+        fontWeight: 'bold',
+        color: colors.warning,
+    },
+    anomalyAlert: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FEE2E2',
+        padding: 8,
+        borderRadius: 8,
+        marginBottom: 10,
+        marginTop: -4,
+    },
+    anomalyAlertText: {
+        fontSize: 11,
+        color: colors.error,
+        marginLeft: 6,
+        flex: 1,
+        fontWeight: '600',
+    },
+    missingValue: {
+        color: colors.textMuted,
+        fontStyle: 'italic',
+        textDecorationLine: 'line-through',
+    },
+    missingLabel: {
+        fontSize: 9,
+        color: colors.error,
+        marginTop: 2,
+        fontStyle: 'italic',
+    },
+    alphaBadgeOwner: {
+        backgroundColor: '#FEE2E2',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    alphaBadgeOwnerText: {
+        fontSize: 9,
+        fontWeight: 'bold',
+        color: colors.error,
+    },
+    // Photo Button Styles
+    photoButtonsRow: {
+        flexDirection: 'row',
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: colors.divider,
+    },
+    photoButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: `${colors.primary}10`,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        gap: 6,
+    },
+    photoButtonText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: colors.textPrimary,
+    },
+    noPhotoContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 8,
+        gap: 6,
+    },
+    noPhotoText: {
+        fontSize: 11,
+        color: colors.textMuted,
+        fontStyle: 'italic',
+    },
+    // Photo Modal Styles
+    photoModalContainer: {
+        backgroundColor: 'white',
+        marginHorizontal: 20,
+        borderRadius: 20,
+        maxHeight: '90%',
+    },
+    photoModalContent: {
+        padding: 0,
+    },
+    photoModalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.divider,
+    },
+    photoTypeBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        gap: 6,
+    },
+    photoTypeText: {
+        fontSize: 13,
+        fontWeight: 'bold',
+    },
+    photoImage: {
+        width: '100%',
+        height: 350,
+        backgroundColor: '#F3F4F6',
+    },
+    noPhotoView: {
+        height: 350,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#F9FAFB',
+    },
+    noPhotoViewText: {
+        marginTop: 12,
+        fontSize: 14,
+        color: colors.textMuted,
+    },
+    photoDetails: {
+        padding: 16,
+        gap: 12,
+    },
+    photoDetailRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    photoDetailLabel: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: colors.textSecondary,
+        width: 60,
+    },
+    photoDetailValue: {
+        fontSize: 13,
+        color: colors.textPrimary,
+    },
+    photoCloseButton: {
+        margin: 16,
+        borderRadius: 12,
+    },
 });

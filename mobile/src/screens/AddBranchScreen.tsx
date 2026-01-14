@@ -1,7 +1,7 @@
 // d:\AHMAD MUZAYYIN\ChikoAttendance\mobile\src\screens\AddBranchScreen.tsx
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert, TouchableOpacity, Platform, KeyboardAvoidingView } from 'react-native';
-import { TextInput, Button, Text, Surface } from 'react-native-paper';
+import { TextInput, Button, Text, Surface, Searchbar } from 'react-native-paper';
 import * as Location from 'expo-location';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import axios from 'axios';
@@ -10,6 +10,7 @@ import { API_CONFIG } from '../config/api';
 import { colors, spacing, borderRadius, shadows } from '../theme/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 
 export default function AddBranchScreen() {
     const navigation = useNavigation();
@@ -28,6 +29,30 @@ export default function AddBranchScreen() {
     const [showEndPicker, setShowEndPicker] = useState(false);
     const [loading, setLoading] = useState(false);
     const [locationLoading, setLocationLoading] = useState(false);
+
+    // Search
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchLoading, setSearchLoading] = useState(false);
+
+    const searchLocation = async () => {
+        if (!searchQuery.trim()) return;
+        setSearchLoading(true);
+        try {
+            const geocodedLocation = await Location.geocodeAsync(searchQuery);
+            if (geocodedLocation.length > 0) {
+                const { latitude, longitude } = geocodedLocation[0];
+                setLatitude(latitude.toString());
+                setLongitude(longitude.toString());
+            } else {
+                Alert.alert('Tidak Ditemukan', 'Lokasi tidak ditemukan. Coba kata kunci lain.');
+            }
+        } catch (error) {
+            console.log(error);
+            Alert.alert('Error', 'Gagal mencari lokasi. Pastikan internet aktif.');
+        } finally {
+            setSearchLoading(false);
+        }
+    };
 
     const onTimeChange = (isStart: boolean, event: any, selectedDate?: Date) => {
         if (Platform.OS !== 'android') {
@@ -180,8 +205,56 @@ export default function AddBranchScreen() {
                             icon="crosshairs-gps"
                             style={styles.locationBtn}
                         >
-                            Ambil Lokasi Sekarang
+                            Ambil Lokasi Sekarang (GPS)
                         </Button>
+
+                        {/* MAP PICKER */}
+                        <View style={styles.mapContainer}>
+                            <View style={styles.searchContainer}>
+                                <Searchbar
+                                    placeholder="Cari Kota, Jalan, atau Daerah..."
+                                    onChangeText={setSearchQuery}
+                                    value={searchQuery}
+                                    loading={searchLoading}
+                                    onIconPress={searchLocation}
+                                    onSubmitEditing={searchLocation}
+                                    style={styles.searchBar}
+                                    inputStyle={styles.searchInput}
+                                    elevation={1}
+                                />
+                            </View>
+
+                            <MapView
+                                provider={PROVIDER_DEFAULT}
+                                style={styles.map}
+                                region={{
+                                    latitude: parseFloat(latitude) || -6.2088,
+                                    longitude: parseFloat(longitude) || 106.8456,
+                                    latitudeDelta: 0.005,
+                                    longitudeDelta: 0.005,
+                                }}
+                                onPress={(e) => {
+                                    setLatitude(e.nativeEvent.coordinate.latitude.toString());
+                                    setLongitude(e.nativeEvent.coordinate.longitude.toString());
+                                }}
+                            >
+                                <Marker
+                                    coordinate={{
+                                        latitude: parseFloat(latitude) || -6.2088,
+                                        longitude: parseFloat(longitude) || 106.8456,
+                                    }}
+                                    draggable
+                                    title="Lokasi Outlet"
+                                    description="Geser untuk menyesuaikan"
+                                    onDragEnd={(e) => {
+                                        setLatitude(e.nativeEvent.coordinate.latitude.toString());
+                                        setLongitude(e.nativeEvent.coordinate.longitude.toString());
+                                    }}
+                                >
+                                    <MaterialCommunityIcons name="map-marker" size={40} color="#DC2626" />
+                                </Marker>
+                            </MapView>
+                        </View>
                         <TextInput
                             label="Radius Absensi (meter)"
                             value={radius}
@@ -291,5 +364,52 @@ const styles = StyleSheet.create({
     timeLabel: { fontSize: 9, color: colors.textMuted, textTransform: 'uppercase', fontWeight: 'bold' },
     timeValue: { fontSize: 14, fontWeight: 'bold', color: colors.textPrimary },
     submitBtn: { marginTop: spacing.md, borderRadius: borderRadius.md, backgroundColor: colors.primary },
-    submitBtnContent: { height: 48 }
+    submitBtnContent: { height: 48 },
+
+    // Map Styles
+    mapContainer: {
+        height: 250,
+        borderRadius: borderRadius.md,
+        overflow: 'hidden',
+        marginVertical: 12,
+        borderWidth: 1,
+        borderColor: colors.divider,
+        backgroundColor: '#f0f0f0',
+    },
+    map: {
+        width: '100%',
+        height: '100%',
+    },
+    mapHint: {
+        position: 'absolute',
+        top: 8,
+        left: 8,
+        right: 8,
+        zIndex: 10,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        padding: 6,
+        borderRadius: 8,
+        fontSize: 10,
+        color: colors.textSecondary,
+        textAlign: 'center',
+        elevation: 2,
+    },
+    // Search Styles
+    searchContainer: {
+        position: 'absolute',
+        top: 10,
+        left: 10,
+        right: 10,
+        zIndex: 20,
+    },
+    searchBar: {
+        backgroundColor: 'white',
+        borderRadius: 24,
+        height: 46
+    },
+    searchInput: {
+        minHeight: 0,
+        fontSize: 14,
+        alignSelf: 'center', // Fix text alignment
+    }
 });

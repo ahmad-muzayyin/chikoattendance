@@ -22,10 +22,7 @@ export default function OwnerRecapEmployeesScreen() {
         setLoading(true);
         try {
             const token = await SecureStore.getItemAsync('authToken');
-            // assuming an endpoint to get users by branch exists, or FILTER client side from all employees.
-            // For efficiency, server side filtering is better. But let's check existing endpoints.
-            // adminController.getEmployees returns ALL users with branch info.
-            // We can filter on client side for now.
+            // Get all employees
             const res = await axios.get(`${API_CONFIG.BASE_URL}/admin/employees`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -35,7 +32,72 @@ export default function OwnerRecapEmployeesScreen() {
                 const uBranchId = u.Branch?.id || u.branchId;
                 return uBranchId == branchId;
             });
-            setEmployees(filtered);
+
+            // Fetch attendance stats for each employee (current month)
+            const currentMonth = new Date().getMonth() + 1;
+            const currentYear = new Date().getFullYear();
+
+            const employeesWithStats = await Promise.all(
+                filtered.map(async (employee: any) => {
+                    try {
+                        // Fetch attendance for current month
+                        const attendanceRes = await axios.get(
+                            `${API_CONFIG.BASE_URL}/admin/attendance/${employee.id}`,
+                            {
+                                params: { month: currentMonth, year: currentYear },
+                                headers: { Authorization: `Bearer ${token}` }
+                            }
+                        );
+
+                        const attendances = attendanceRes.data || [];
+
+                        // Calculate stats
+                        let hadir = 0;
+                        let telat = 0;
+                        let izin = 0;
+                        let alpha = 0;
+
+                        // Group by date to count unique days
+                        const dateMap: any = {};
+                        attendances.forEach((att: any) => {
+                            const date = new Date(att.timestamp).toDateString();
+                            if (!dateMap[date]) dateMap[date] = [];
+                            dateMap[date].push(att);
+                        });
+
+                        // Analyze each day
+                        Object.values(dateMap).forEach((dayAttendances: any) => {
+                            const hasCheckIn = dayAttendances.some((a: any) => a.type === 'CHECK_IN');
+                            const hasAlpha = dayAttendances.some((a: any) => a.type === 'ALPHA');
+                            const hasPermit = dayAttendances.some((a: any) => a.type === 'PERMIT');
+                            const hasSick = dayAttendances.some((a: any) => a.type === 'SICK');
+                            const isLate = dayAttendances.some((a: any) => a.isLate === true);
+
+                            if (hasAlpha) {
+                                alpha++;
+                            } else if (hasPermit || hasSick) {
+                                izin++;
+                            } else if (hasCheckIn) {
+                                hadir++;
+                                if (isLate) telat++;
+                            }
+                        });
+
+                        return {
+                            ...employee,
+                            stats: { hadir, telat, izin, alpha }
+                        };
+                    } catch (error) {
+                        console.error(`Error fetching stats for ${employee.name}:`, error);
+                        return {
+                            ...employee,
+                            stats: { hadir: 0, telat: 0, izin: 0, alpha: 0 }
+                        };
+                    }
+                })
+            );
+
+            setEmployees(employeesWithStats);
         } catch (error) {
             console.error('Fetch employees error:', error);
         } finally {
@@ -232,7 +294,6 @@ const styles = StyleSheet.create({
     statsRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
     },
     statBadge: {
         paddingHorizontal: 6,
@@ -240,6 +301,7 @@ const styles = StyleSheet.create({
         borderRadius: 6,
         minWidth: 28,
         alignItems: 'center',
+        marginRight: 4,
     },
     statLabel: {
         fontSize: 10,
