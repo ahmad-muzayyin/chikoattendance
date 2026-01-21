@@ -50,12 +50,15 @@ export default function AttendanceInputScreen() {
     const [nearestBranch, setNearestBranch] = useState<any>(null); // For Map Visualization
 
     // Result Modals
-    const [resultModal, setResultModal] = useState<{ visible: boolean, type: 'success' | 'error' | 'range', message: string, data?: any }>({
+    const [resultModal, setResultModal] = useState<{ visible: boolean, type: 'success' | 'error' | 'range' | 'info', message: string, data?: any }>({
         visible: false,
         type: 'success',
         message: ''
     });
 
+    const [todayCheckIn, setTodayCheckIn] = useState<Date | null>(null);
+
+    // Initial Data Fetch
     useEffect(() => {
         (async () => {
             const { status } = await Location.requestForegroundPermissionsAsync();
@@ -64,10 +67,14 @@ export default function AttendanceInputScreen() {
             } else {
                 setStatusMessage('Izin lokasi diperlukan.');
             }
+
+            // Fetch Today's Attendance State
+            fetchTodayAttendance();
         })();
 
         // Fetch Branches for detection
         const fetchBranches = async () => {
+            // ... (existing code)
             try {
                 const token = await SecureStore.getItemAsync('authToken');
                 if (!token) return;
@@ -76,11 +83,44 @@ export default function AttendanceInputScreen() {
                 });
                 setBranches(data);
             } catch (error) {
-                console.log('Failed to fetch branches for location check');
+                console.log('Failed to fetch branches');
             }
         };
         fetchBranches();
     }, []);
+
+    const fetchTodayAttendance = async () => {
+        try {
+            const token = await SecureStore.getItemAsync('authToken');
+            // Fetch calendar/history to find today's record
+            // Using endpoint that returns list of attendance
+            const { data } = await axios.get(
+                `${API_CONFIG.BASE_URL}${ENDPOINTS.CALENDAR}?deviceId=MOBILE_APP`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            // Find today (local time)
+            const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+            const todayRecord = data.find((r: any) => r.date === todayStr);
+
+            if (todayRecord && todayRecord.checkInTime) {
+                // Parse checkInTime (assuming format "HH:mm" or full ISO)
+                // If the API returns full ISO string, great. If "HH:mm", we need to combine with date.
+                // Based on previous file views, it seems to be time string "08:00".
+                // Let's try to parse carefully.
+                let checkIn = new Date();
+                if (todayRecord.checkInTime.includes('T')) {
+                    checkIn = new Date(todayRecord.checkInTime);
+                } else {
+                    const [hours, minutes] = todayRecord.checkInTime.split(':');
+                    checkIn.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                }
+                setTodayCheckIn(checkIn);
+            }
+        } catch (error) {
+            console.log("Failed to fetch todays attendance", error);
+        }
+    };
 
     const getLocation = async () => {
         try {
@@ -153,11 +193,76 @@ export default function AttendanceInputScreen() {
             return;
         }
 
+        // Logic Lembur untuk Check Out
+        if (type === 'CHECK_OUT') {
+            // Check Lock
+            const lockUntil = await SecureStore.getItemAsync('OVERTIME_LOCK_UNTIL');
+            if (lockUntil) {
+                const lockDate = new Date(parseInt(lockUntil));
+                if (new Date() < lockDate) {
+                    const diffMinutes = Math.ceil((lockDate.getTime() - new Date().getTime()) / 60000);
+                    const hours = Math.floor(diffMinutes / 60);
+                    const mins = diffMinutes % 60;
+
+                    setResultModal({
+                        visible: true,
+                        type: 'info',
+                        message: `Anda sedang dalam mode lembur.\n\nAbsensi pulang baru dapat dilakukan ${hours > 0 ? `${hours} jam ` : ''}${mins} menit lagi.`
+                    });
+                    return;
+                } else {
+                    // Lock expired, clean up
+                    await SecureStore.deleteItemAsync('OVERTIME_LOCK_UNTIL');
+                }
+            }
+
+            // Check Duration > 8 Hours for Overtime Prompt
+            // "kepala toko" specific or general, applying logic as requested
+            // Assuming 8 hours standard
+            if (todayCheckIn) {
+                const now = new Date();
+                const diffMs = now.getTime() - todayCheckIn.getTime();
+                const diffHours = diffMs / (1000 * 60 * 60);
+
+                if (diffHours >= 8) {
+                    Alert.alert(
+                        "Konfirmasi Lembur",
+                        "Apakah anda sedang mengerjakan lembur?",
+                        [
+                            {
+                                text: "Tidak",
+                                onPress: () => processCheckout() // Proceed normal checkout
+                            },
+                            {
+                                text: "Ya, Saya Lembur",
+                                onPress: async () => {
+                                    // Lock for 3 hours
+                                    const lockTime = new Date().getTime() + (3 * 60 * 60 * 1000);
+                                    await SecureStore.setItemAsync('OVERTIME_LOCK_UNTIL', lockTime.toString());
+
+                                    Alert.alert(
+                                        "Mode Lembur Diaktifkan",
+                                        "Absensi pulang Anda otomatis tertunda selama 3 jam dari sekarang. Silakan lanjutkan pekerjaan Anda."
+                                    );
+                                    // Do NOT proceed to checkout
+                                }
+                            }
+                        ]
+                    );
+                    return; // Stop here, wait for user choice
+                }
+            }
+        }
+
         if (type === 'CHECK_IN' && !photo) {
             setResultModal({ visible: true, type: 'error', message: 'Foto Selfie wajib diambil sebagai bukti kehadiran.' });
             return;
         }
 
+        processCheckout(type);
+    };
+
+    const processCheckout = async (type: 'CHECK_IN' | 'CHECK_OUT' = 'CHECK_OUT') => {
         // Confirmation Dialog
         Alert.alert(
             `Konfirmasi ${type === 'CHECK_IN' ? 'Check-In' : 'Check-Out'}`,
@@ -175,8 +280,8 @@ export default function AttendanceInputScreen() {
                             const res = await axios.post(
                                 `${API_CONFIG.BASE_URL}${endpoint}`,
                                 {
-                                    latitude: location.coords.latitude,
-                                    longitude: location.coords.longitude,
+                                    latitude: location?.coords.latitude,
+                                    longitude: location?.coords.longitude,
                                     deviceId: 'MOBILE_APP',
                                     photoUrl: photo,
                                     notes: notes
@@ -189,6 +294,15 @@ export default function AttendanceInputScreen() {
                             let successMsg = type === 'CHECK_IN'
                                 ? 'Selamat bekerja! Semangat untuk hari ini.'
                                 : 'Terima kasih atas kerja kerasmu hari ini. Hati-hati di jalan!';
+
+                            // If Success Check In, update local state
+                            if (type === 'CHECK_IN') {
+                                setTodayCheckIn(new Date());
+                            }
+                            // If Success Check Out, clear any locks
+                            if (type === 'CHECK_OUT') {
+                                SecureStore.deleteItemAsync('OVERTIME_LOCK_UNTIL');
+                            }
 
                             setResultModal({
                                 visible: true,
@@ -431,15 +545,18 @@ export default function AttendanceInputScreen() {
                     contentContainerStyle={styles.modalContainer}
                 >
                     <View style={styles.modalContent}>
-                        <View style={[styles.modalIconCircle, { backgroundColor: resultModal.type === 'success' ? '#DCFCE7' : '#FEF2F2' }]}>
+                        <View style={[styles.modalIconCircle, { backgroundColor: resultModal.type === 'success' ? '#DCFCE7' : resultModal.type === 'info' ? '#DBEAFE' : '#FEF2F2' }]}>
                             <MaterialCommunityIcons
-                                name={resultModal.type === 'success' ? 'check' : 'alert-outline'}
+                                name={resultModal.type === 'success' ? 'check' : resultModal.type === 'info' ? 'clock-check-outline' : 'alert-outline'}
                                 size={40}
-                                color={resultModal.type === 'success' ? '#16A34A' : '#DC2626'}
+                                color={resultModal.type === 'success' ? '#16A34A' : resultModal.type === 'info' ? '#3B82F6' : '#DC2626'}
                             />
                         </View>
 
-                        <Text style={styles.modalTitle}>{resultModal.type === 'success' ? 'Berhasil!' : 'Oops!'}</Text>
+                        <Text style={styles.modalTitle}>
+                            {resultModal.type === 'success' ? 'Berhasil!' :
+                                resultModal.type === 'info' ? 'Mode Lembur' : 'Oops!'}
+                        </Text>
                         <Text style={styles.modalMessage}>{resultModal.message}</Text>
 
                         {resultModal.type === 'range' && resultModal.data && (
@@ -461,7 +578,7 @@ export default function AttendanceInputScreen() {
                             }}
                             style={[
                                 styles.modalButton,
-                                { backgroundColor: resultModal.type === 'success' ? '#16A34A' : '#DC2626' }
+                                { backgroundColor: resultModal.type === 'success' ? '#16A34A' : resultModal.type === 'info' ? '#3B82F6' : '#DC2626' }
                             ]}
                             labelStyle={{ fontWeight: 'bold' }}
                         >

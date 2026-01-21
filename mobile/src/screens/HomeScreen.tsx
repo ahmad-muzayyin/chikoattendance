@@ -217,19 +217,26 @@ export default function HomeScreen() {
                 showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
             >
-                {/* Status Summary (Clean Minimalist) */}
-                <View style={styles.statsContainer}>
-                    <StatItem label="Hadir" value={stats.hadir.toString()} color={colors.success} />
-                    <View style={styles.statDivider} />
-                    <StatItem label="Telat" value={stats.telat.toString()} color={colors.warning} />
-                    <View style={styles.statDivider} />
-                    {/* Lembur Stat */}
-                    <StatItem label="Lembur" value={stats.lembur.toString()} color="#9333EA" />
-                    <View style={styles.statDivider} />
-                    <StatItem label="Izin" value={stats.izin.toString()} color={colors.info} />
-                    <View style={styles.statDivider} />
-                    <StatItem label="Alpha" value={stats.alpha.toString()} color={colors.error} />
-                </View>
+                {/* Spacer khusus Owner agar tidak tertutup Header */}
+                {user?.role === 'OWNER' && <View style={{ height: spacing.lg }} />}
+                {/* Status Summary (Clean Minimalist) - Hidden for Owner */}
+                {user?.role !== 'OWNER' && (
+                    <View style={styles.statsContainer}>
+                        <StatItem label="Hadir" value={stats.hadir.toString()} color={colors.success} />
+                        <View style={styles.statDivider} />
+                        <StatItem label="Telat" value={stats.telat.toString()} color={colors.warning} />
+                        <View style={stats.lembur > 0 ? {} : { display: 'none' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <View style={styles.statDivider} />
+                                <StatItem label="Lembur" value={stats.lembur.toString()} color="#9333EA" />
+                            </View>
+                        </View>
+                        <View style={styles.statDivider} />
+                        <StatItem label="Izin" value={stats.izin.toString()} color={colors.info} />
+                        <View style={styles.statDivider} />
+                        <StatItem label="Alpha" value={stats.alpha.toString()} color={colors.error} />
+                    </View>
+                )}
 
                 <Text style={styles.sectionTitle}>Akses Cepat</Text>
 
@@ -368,13 +375,13 @@ const styles = StyleSheet.create({
     },
     header: {
         padding: spacing.lg,
-        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 20 : 60,
+        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 10 : 40, // Reduced from 20/60
         backgroundColor: colors.primary,
-        borderBottomLeftRadius: 36,
-        borderBottomRightRadius: 36,
+        borderBottomLeftRadius: 24, // Reduced from 36
+        borderBottomRightRadius: 24, // Reduced from 36
         overflow: 'hidden',
         position: 'relative',
-        paddingBottom: 40, // Increased to make room for decorations
+        paddingBottom: 25, // Reduced from 40
     },
     watermarkContainer: {
         position: 'absolute',
@@ -439,9 +446,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         backgroundColor: 'rgba(255, 255, 255, 0.9)', // Slightly transparent white for glass feel
-        borderRadius: borderRadius.xl,
-        padding: spacing.md,
-        paddingHorizontal: spacing.lg,
+        borderRadius: borderRadius.lg, // Reduced from xl
+        padding: spacing.sm, // Reduced from md
+        paddingHorizontal: spacing.md, // Reduced from lg
         zIndex: 2,
         // Elevation/Shadow
         shadowColor: "#000",
@@ -451,21 +458,21 @@ const styles = StyleSheet.create({
         elevation: 6,
     },
     clockTime: {
-        fontSize: 26,
+        fontSize: 22, // Reduced from 26
         fontWeight: '800',
         color: colors.primary, // Red time
         fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
         letterSpacing: -1,
     },
     clockDate: {
-        fontSize: 13,
+        fontSize: 11, // Reduced from 13
         color: colors.textSecondary,
         fontWeight: '600',
     },
     clockIconBadge: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 36, // Reduced from 44
+        height: 36, // Reduced from 44
+        borderRadius: 18,
         backgroundColor: '#FEE2E2', // Light red bg
         alignItems: 'center',
         justifyContent: 'center',
@@ -477,28 +484,29 @@ const styles = StyleSheet.create({
     scrollContent: {
         paddingHorizontal: spacing.lg,
         paddingBottom: 40,
+        paddingTop: 10, // Added padding top for content safety
     },
     statsContainer: {
         flexDirection: 'row',
         backgroundColor: '#FFF',
-        borderRadius: 20,
-        padding: spacing.lg,
+        borderRadius: 16, // Reduced from 20
+        padding: spacing.md, // Reduced from lg
         justifyContent: 'space-between',
         alignItems: 'center',
         ...shadows.sm,
-        marginBottom: spacing.xl,
+        marginBottom: spacing.sm, // Merely 8px now
     },
     statItem: {
         alignItems: 'center',
         flex: 1,
     },
     statValue: {
-        fontSize: 20,
+        fontSize: 16, // Reduced from 20
         fontWeight: 'bold',
         marginBottom: 4,
     },
     statLabel: {
-        fontSize: 12,
+        fontSize: 10, // Reduced from 12
         color: colors.textSecondary,
     },
     statDivider: {
@@ -507,22 +515,22 @@ const styles = StyleSheet.create({
         backgroundColor: colors.divider,
     },
     sectionTitle: {
-        fontSize: 18,
+        fontSize: 16, // Reduced from 18
         fontWeight: '700',
         color: colors.textPrimary,
-        marginBottom: spacing.md,
+        marginBottom: spacing.xs, // Minimal 4px
         marginLeft: 4,
     },
     gridContainer: {
-        gap: spacing.md,
+        gap: spacing.xs, // Reduced to 4px
     },
     row: {
         flexDirection: 'row',
-        gap: spacing.md,
-        marginBottom: spacing.md,
+        gap: spacing.xs, // Reduced to 4px
+        marginBottom: spacing.xs, // Reduced to 4px
     },
     mainAction: {
-        marginBottom: spacing.md,
+        marginBottom: spacing.xs, // Reduced to 4px
         borderRadius: 20,
         overflow: 'hidden',
         ...shadows.md,
@@ -557,11 +565,12 @@ const styles = StyleSheet.create({
     },
     actionCard: {
         flex: 1,
+        flexDirection: 'row', // Icon and text side by side
+        alignItems: 'center',
         backgroundColor: '#FFF',
-        borderRadius: 20,
-        padding: spacing.md,
-        minHeight: 110,
-        justifyContent: 'space-between',
+        borderRadius: 12, // More compact
+        padding: spacing.sm,
+        minHeight: 65, // Much shorter than 90
         ...shadows.sm,
     },
     actionCardLarge: {
@@ -570,26 +579,26 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     actionIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
+        width: 32,
+        height: 32,
+        borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: spacing.sm,
+        marginRight: 8, // Added gap to text
     },
     actionText: {
         flex: 1,
     },
     actionTitle: {
-        fontSize: 15,
+        fontSize: 13, // Reduced from 15
         fontWeight: '600',
         color: colors.textPrimary,
         marginBottom: 2,
     },
     actionSubtitle: {
-        fontSize: 11,
+        fontSize: 10,
         color: colors.textSecondary,
-        lineHeight: 16,
+        lineHeight: 12, // Tighter leading
     },
     actionArrow: {
         marginLeft: spacing.sm,
@@ -598,9 +607,9 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#E0F2FE', // Light blue bg
-        padding: spacing.md,
-        borderRadius: 12,
-        marginTop: spacing.lg,
+        padding: spacing.sm, // Reduced from md
+        borderRadius: 10, // Reduced from 12
+        marginTop: spacing.sm, // Reduced from lg
     },
     infoText: {
         flex: 1,

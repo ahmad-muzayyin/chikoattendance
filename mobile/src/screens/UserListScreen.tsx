@@ -1,6 +1,6 @@
 // d:\AHMAD MUZAYYIN\ChikoAttendance\mobile\src\screens\UserListScreen.tsx
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, Alert, RefreshControl, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, FlatList, Alert, RefreshControl, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
 import { Text, FAB, Surface, IconButton, ActivityIndicator, Avatar, Searchbar, Chip, Portal, Dialog, Button } from 'react-native-paper';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import axios from 'axios';
@@ -255,6 +255,7 @@ const styles = StyleSheet.create({
     },
     headerContainer: {
         backgroundColor: colors.surface,
+        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + spacing.sm : 20,
         paddingBottom: spacing.sm,
         borderBottomWidth: 1,
         borderBottomColor: colors.divider,

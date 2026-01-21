@@ -27,6 +27,7 @@ type Recap = {
     late: number;
     off: number;
     holiday: number;
+    alpha: number;
 };
 
 type MonthCardProps = {
@@ -36,7 +37,7 @@ type MonthCardProps = {
 };
 
 const MonthCard = ({ data, isFirst, onPress }: MonthCardProps) => {
-    const total = data.onTime + data.late + data.off + data.holiday || 1;
+    const total = data.onTime + data.late + data.off + data.holiday + data.alpha || 1;
     const attendanceRate = ((data.onTime / total) * 100).toFixed(1);
 
     return (
@@ -92,16 +93,16 @@ const MonthCard = ({ data, isFirst, onPress }: MonthCardProps) => {
                     icon="clock-alert"
                 />
                 <StatItem
-                    label="Cuti/Libur"
-                    value={data.off}
-                    color={colors.textMuted}
-                    icon="beach"
+                    label="Alpha"
+                    value={data.alpha}
+                    color={colors.error}
+                    icon="alert-circle"
                 />
                 <StatItem
-                    label="Hari Libur"
-                    value={data.holiday}
-                    color={colors.error}
-                    icon="calendar-remove"
+                    label="Cuti/Izin"
+                    value={data.off}
+                    color={colors.textMuted}
+                    icon="file-document-outline"
                 />
             </View>
         </TouchableOpacity>
@@ -174,8 +175,9 @@ export default function RecapScreen() {
             late: acc.late + curr.late,
             off: acc.off + curr.off,
             holiday: acc.holiday + curr.holiday,
+            alpha: acc.alpha + (curr.alpha || 0),
         }),
-        { onTime: 0, late: 0, off: 0, holiday: 0 }
+        { onTime: 0, late: 0, off: 0, holiday: 0, alpha: 0 }
     );
 
     return (
@@ -224,6 +226,13 @@ export default function RecapScreen() {
                                 {totalStats.late}
                             </Text>
                             <Text style={styles.summaryLabel}>Terlambat</Text>
+                        </View>
+                        <View style={styles.summaryDivider} />
+                        <View style={styles.summaryStatItem}>
+                            <Text style={[styles.summaryValue, { color: colors.error }]}>
+                                {totalStats.alpha}
+                            </Text>
+                            <Text style={styles.summaryLabel}>Alpha</Text>
                         </View>
                         <View style={styles.summaryDivider} />
                         <View style={styles.summaryStatItem}>

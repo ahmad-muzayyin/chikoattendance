@@ -41,6 +41,26 @@ export default function EmployeeDetailScreen() {
         navigation.setOptions({ title: 'Detail Karyawan' });
     }, []);
 
+    const stats = React.useMemo(() => {
+        let onTime = 0;
+        let late = 0;
+        let permit = 0;
+        let alpha = 0;
+
+        attendanceHistory.forEach((item: any) => {
+            if (item.type === 'CHECK_IN' || (!['CHECK_OUT', 'PERMIT', 'SICK', 'ALPHA'].includes(item.type))) {
+                if (item.isLate) late++;
+                else onTime++;
+            } else if (item.type === 'ALPHA') {
+                alpha++;
+            } else if (item.type === 'PERMIT' || item.type === 'SICK') {
+                permit++;
+            }
+        });
+
+        return { onTime, late, permit, alpha };
+    }, [attendanceHistory]);
+
     const handleGivePunishment = async () => {
         if (!points || !reason) {
             Alert.alert('Eror', 'Mohon isi poin dan alasan sanksi.');
@@ -95,6 +115,29 @@ export default function EmployeeDetailScreen() {
                     >
                         Beri Poin Sanksi
                     </Button>
+                </View>
+
+                {/* Stats Summary */}
+                <View style={styles.statsContainer}>
+                    <View style={styles.statCard}>
+                        <Text style={[styles.statValue, { color: colors.success }]}>{stats.onTime}</Text>
+                        <Text style={styles.statLabel}>Tepat Waktu</Text>
+                    </View>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statCard}>
+                        <Text style={[styles.statValue, { color: colors.warning }]}>{stats.late}</Text>
+                        <Text style={styles.statLabel}>Terlambat</Text>
+                    </View>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statCard}>
+                        <Text style={[styles.statValue, { color: colors.error }]}>{stats.alpha}</Text>
+                        <Text style={styles.statLabel}>Alpha</Text>
+                    </View>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statCard}>
+                        <Text style={[styles.statValue, { color: colors.info }]}>{stats.permit}</Text>
+                        <Text style={styles.statLabel}>Izin/Sakit</Text>
+                    </View>
                 </View>
 
                 {/* History List */}
@@ -258,5 +301,35 @@ const styles = StyleSheet.create({
     modalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
     modalTitle: { fontSize: 20, fontWeight: 'bold', marginLeft: 10 },
     input: { marginBottom: 15, backgroundColor: 'white' },
-    modalActions: { flexDirection: 'row', marginTop: 10 }
+    modalActions: { flexDirection: 'row', marginTop: 10 },
+    statsContainer: {
+        flexDirection: 'row',
+        backgroundColor: 'white',
+        marginHorizontal: spacing.xl,
+        marginBottom: spacing.lg,
+        padding: spacing.md,
+        borderRadius: 16,
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        ...shadows.sm,
+    },
+    statCard: {
+        alignItems: 'center',
+        flex: 1,
+    },
+    statValue: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 4,
+    },
+    statLabel: {
+        fontSize: 10,
+        color: colors.textSecondary,
+        textAlign: 'center',
+    },
+    statDivider: {
+        width: 1,
+        height: 24,
+        backgroundColor: '#E2E8F0',
+    },
 });

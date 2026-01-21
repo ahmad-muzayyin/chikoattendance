@@ -1,6 +1,6 @@
 // d:\AHMAD MUZAYYIN\ChikoAttendance\mobile\src\screens\EmployeeListScreen.tsx
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity, StatusBar } from 'react-native';
+import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity, StatusBar, Platform } from 'react-native';
 import { Avatar, Text, Surface, Searchbar, useTheme } from 'react-native-paper';
 import axios from 'axios';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
@@ -9,9 +9,12 @@ import { API_CONFIG } from '../config/api';
 import { colors, spacing, borderRadius, shadows } from '../theme/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { PieChart } from 'react-native-gifted-charts';
 
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
+
+type StatusFilter = 'ALL' | 'Hadir' | 'Telat' | 'Belum Hadir';
 
 export default function EmployeeListScreen() {
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -20,6 +23,7 @@ export default function EmployeeListScreen() {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
 
     const fetchMonitoring = useCallback(async () => {
         setLoading(true);
@@ -40,10 +44,15 @@ export default function EmployeeListScreen() {
         if (isFocused) fetchMonitoring();
     }, [isFocused, fetchMonitoring]);
 
-    const filteredData = data.filter((item: any) =>
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.branch && item.branch.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+    const filteredData = data
+        .filter((item: any) =>
+            item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (item.branch && item.branch.toLowerCase().includes(searchQuery.toLowerCase()))
+        )
+        .filter((item: any) => {
+            if (statusFilter === 'ALL') return true;
+            return item.status === statusFilter;
+        });
 
     const stats = {
         total: data.length,
@@ -68,91 +77,71 @@ export default function EmployeeListScreen() {
         }
     };
 
-    const renderItem = ({ item }: { item: any }) => (
-        <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => navigation.navigate('EmployeeDetail', { employee: { id: item.userId, name: item.name, role: item.role } })}
-        >
-            <Surface style={styles.card} elevation={2}>
-                <View style={styles.cardHeader}>
-                    <View style={styles.avatarContainer}>
-                        <Avatar.Text
-                            size={50}
-                            label={item.name.substring(0, 2).toUpperCase()}
-                            style={{ backgroundColor: item.status === 'Belum Hadir' ? colors.textMuted : colors.primary }}
-                            color="#FFF"
-                        />
-                        {item.status !== 'Belum Hadir' && (
-                            <View style={styles.onlineBadge} />
-                        )}
-                    </View>
+    const renderItem = ({ item }: { item: any }) => {
+        const formatTime = (time: any, formatted: any) => {
+            if (formatted) return formatted;
+            if (!time) return '--:--';
+            return new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        };
 
-                    <View style={styles.cardInfo}>
-                        <Text style={styles.nameText} numberOfLines={1}>{item.name}</Text>
-
-                        {/* Role / Level */}
-                        <View style={[styles.roleContainer, { marginBottom: 4 }]}>
-                            <MaterialCommunityIcons name="shield-account" size={14} color={colors.primary} />
-                            <Text style={[styles.roleText, { color: colors.primary, fontWeight: '700' }]}>{item.role || 'Karyawan'}</Text>
+        return (
+            <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate('EmployeeDetail', { employee: { id: item.userId, name: item.name, role: item.role } })}
+                style={{ marginBottom: 10 }}
+            >
+                <View style={styles.card}>
+                    <View style={styles.cardMain}>
+                        <View style={styles.cardLeft}>
+                            <Avatar.Text
+                                size={40}
+                                label={item.name.substring(0, 2).toUpperCase()}
+                                style={{ backgroundColor: item.status === 'Belum Hadir' ? '#F3F4F6' : colors.primary }}
+                                color={item.status === 'Belum Hadir' ? '#9CA3AF' : '#FFF'}
+                                labelStyle={{ fontSize: 13, fontWeight: 'bold' }}
+                            />
+                            <View style={styles.cardTexts}>
+                                <Text style={styles.nameText} numberOfLines={1}>{item.name}</Text>
+                                <Text style={styles.roleText} numberOfLines={1}>
+                                    {item.role || 'Karyawan'} • {item.branch || '-'}
+                                </Text>
+                            </View>
                         </View>
 
-                        {/* Branch */}
-                        <View style={styles.roleContainer}>
-                            <MaterialCommunityIcons name="store-marker-outline" size={14} color={colors.textSecondary} />
-                            <Text style={styles.roleText}>{item.branch || 'No Branch'}</Text>
-                        </View>
-                    </View>
-
-                    <View style={{ alignItems: 'flex-end' }}>
-                        <View style={{ flexDirection: 'row', gap: 4 }}>
-                            {/* Overtime Badge */}
-                            {item.isOvertime && (
-                                <View style={[styles.statusBadge, { backgroundColor: '#F3E8FF' }]}>
-                                    <Text style={[styles.statusText, { color: '#9333EA' }]}>
-                                        Lembur
-                                    </Text>
-                                </View>
-                            )}
-
-                            {/* Standard Status Badge */}
-                            <View style={[styles.statusBadge, { backgroundColor: getStatusBg(item.status) }]}>
+                        <View style={styles.cardRight}>
+                            <View style={[styles.statusPill, { backgroundColor: getStatusBg(item.status) }]}>
+                                <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
                                 <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
                                     {item.status}
                                 </Text>
                             </View>
+                            {item.isOvertime && (
+                                <Text style={styles.overtimeText}>+ Lembur</Text>
+                            )}
                         </View>
+                    </View>
 
-                        {item.isHighRisk && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, backgroundColor: '#FEF2F2', padding: 4, borderRadius: 8 }}>
-                                <MaterialCommunityIcons name="alert-circle" size={14} color={colors.error} />
-                                <Text style={{ fontSize: 10, color: colors.error, fontWeight: 'bold', marginLeft: 2 }}>
-                                    Warning
-                                </Text>
-                            </View>
-                        )}
+                    <View style={styles.cardFooter}>
+                        <View style={styles.timeBox}>
+                            <MaterialCommunityIcons name="login-variant" size={14} color={item.checkInTime ? colors.success : colors.textMuted} />
+                            <Text style={styles.timeLabel}>Masuk</Text>
+                            <Text style={[styles.timeValue, { color: item.checkInTime ? colors.textPrimary : colors.textMuted }]}>
+                                {formatTime(item.checkInTime, item.checkInTimeFormatted)}
+                            </Text>
+                        </View>
+                        <View style={styles.timeDivider} />
+                        <View style={styles.timeBox}>
+                            <MaterialCommunityIcons name="logout-variant" size={14} color={item.checkOutTime ? colors.error : colors.textMuted} />
+                            <Text style={styles.timeLabel}>Keluar</Text>
+                            <Text style={[styles.timeValue, { color: item.checkOutTime ? colors.textPrimary : colors.textMuted }]}>
+                                {formatTime(item.checkOutTime, item.checkOutTimeFormatted)}
+                            </Text>
+                        </View>
                     </View>
                 </View>
-
-                <View style={styles.divider} />
-
-                <View style={styles.timeContainer}>
-                    <View style={styles.timeBox}>
-                        <Text style={styles.timeLabel}>Check In</Text>
-                        <Text style={[styles.timeValue, { color: item.checkInTime ? colors.textPrimary : colors.textMuted }]}>
-                            {item.checkInTimeFormatted || (item.checkInTime ? new Date(item.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--')}
-                        </Text>
-                    </View>
-                    <View style={styles.verticalDivider} />
-                    <View style={styles.timeBox}>
-                        <Text style={styles.timeLabel}>Check Out</Text>
-                        <Text style={[styles.timeValue, { color: item.checkOutTime ? colors.textPrimary : colors.textMuted }]}>
-                            {item.checkOutTimeFormatted || (item.checkOutTime ? new Date(item.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--')}
-                        </Text>
-                    </View>
-                </View>
-            </Surface>
-        </TouchableOpacity>
-    );
+            </TouchableOpacity>
+        );
+    };
 
     return (
         <View style={styles.container}>
@@ -161,19 +150,29 @@ export default function EmployeeListScreen() {
             {/* Header Area */}
             <View style={styles.headerContainer}>
                 <View style={styles.headerContent}>
-                    <View>
+                    <View style={{ flex: 1 }}>
                         <Text style={styles.headerTitle}>Monitoring Karyawan</Text>
-                        <Text style={styles.headerSubtitle}>{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                            <Text style={styles.headerSubtitle}>
+                                {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </Text>
+                            {statusFilter !== 'ALL' && (
+                                <View style={styles.filterBadge}>
+                                    <MaterialCommunityIcons name="filter" size={9} color="#FFF" />
+                                    <Text style={styles.filterBadgeText}>{statusFilter}</Text>
+                                </View>
+                            )}
+                        </View>
                     </View>
                     <TouchableOpacity onPress={fetchMonitoring} style={styles.refreshBtn}>
-                        <MaterialCommunityIcons name="refresh" size={24} color="#FFF" />
+                        <MaterialCommunityIcons name="refresh" size={20} color="#FFF" />
                     </TouchableOpacity>
                 </View>
 
-                {/* Search Bar */}
+                {/* Search Bar - Compact */}
                 <Searchbar
                     placeholder="Cari nama atau cabang..."
-                    placeholderTextColor="rgba(255,255,255,0.7)"
+                    placeholderTextColor="rgba(255,255,255,0.6)"
                     onChangeText={setSearchQuery}
                     value={searchQuery}
                     style={styles.searchBar}
@@ -182,12 +181,81 @@ export default function EmployeeListScreen() {
                     elevation={0}
                 />
 
-                {/* Stats Row */}
-                <View style={styles.statsRow}>
-                    <StatBox label="Total" count={stats.total} icon="account-group" />
-                    <StatBox label="Hadir" count={stats.hadir} icon="check-circle" color="#4ADE80" />
-                    <StatBox label="Telat" count={stats.telat} icon="clock-alert" color="#F87171" />
-                    <StatBox label="Absen" count={stats.absent} icon="account-off" color="#94A3B8" />
+                {/* Circle Chart for Monitoring Summary */}
+                <Surface style={styles.chartSurface} elevation={0}>
+                    <View style={styles.chartRow}>
+                        <TouchableOpacity
+                            activeOpacity={0.7}
+                            onPress={() => {
+                                // Cycle through filters when clicking the chart
+                                if (statusFilter === 'ALL') setStatusFilter('Hadir');
+                                else if (statusFilter === 'Hadir') setStatusFilter('Telat');
+                                else if (statusFilter === 'Telat') setStatusFilter('Belum Hadir');
+                                else setStatusFilter('ALL');
+                            }}
+                        >
+                            <PieChart
+                                data={[
+                                    { value: stats.hadir || 0.1, color: '#4ADE80', gradientCenterColor: '#4ADE80' },
+                                    { value: stats.telat || 0, color: '#F87171', gradientCenterColor: '#F87171' },
+                                    { value: stats.absent || 0, color: 'rgba(255,255,255,0.4)', gradientCenterColor: 'rgba(255,255,255,0.4)' },
+                                ]}
+                                donut
+                                radius={38}
+                                innerRadius={30}
+                                innerCircleColor={colors.primary}
+                                centerLabelComponent={() => {
+                                    const total = stats.total;
+                                    return (
+                                        <View style={{ alignItems: 'center' }}>
+                                            <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#FFF' }}>{total}</Text>
+                                        </View>
+                                    );
+                                }}
+                            />
+                        </TouchableOpacity>
+                        <View style={styles.chartLegend}>
+                            <TouchableOpacity
+                                style={[
+                                    styles.legendItem,
+                                    statusFilter === 'Hadir' && styles.legendItemActive
+                                ]}
+                                onPress={() => setStatusFilter(statusFilter === 'Hadir' ? 'ALL' : 'Hadir')}
+                                activeOpacity={0.7}
+                            >
+                                <View style={[styles.legendDot, { backgroundColor: '#4ADE80' }]} />
+                                <Text style={styles.legendLabel}>Hadir: {stats.hadir}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    styles.legendItem,
+                                    statusFilter === 'Telat' && styles.legendItemActive
+                                ]}
+                                onPress={() => setStatusFilter(statusFilter === 'Telat' ? 'ALL' : 'Telat')}
+                                activeOpacity={0.7}
+                            >
+                                <View style={[styles.legendDot, { backgroundColor: '#F87171' }]} />
+                                <Text style={styles.legendLabel}>Telat: {stats.telat}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    styles.legendItem,
+                                    statusFilter === 'Belum Hadir' && styles.legendItemActive
+                                ]}
+                                onPress={() => setStatusFilter(statusFilter === 'Belum Hadir' ? 'ALL' : 'Belum Hadir')}
+                                activeOpacity={0.7}
+                            >
+                                <View style={[styles.legendDot, { backgroundColor: 'rgba(255,255,255,0.5)' }]} />
+                                <Text style={styles.legendLabel}>Belum: {stats.absent}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Surface>
+
+                {/* Hint Text - Compact */}
+                <View style={styles.hintContainer}>
+                    <MaterialCommunityIcons name="gesture-tap" size={14} color="rgba(255,255,255,0.9)" />
+                    <Text style={styles.hintText}>Ketuk untuk filter</Text>
                 </View>
             </View>
 
@@ -230,48 +298,115 @@ const styles = StyleSheet.create({
     },
     headerContainer: {
         backgroundColor: colors.primary,
-        paddingTop: 50,
-        paddingHorizontal: spacing.lg,
-        paddingBottom: spacing.xl,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
+        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 10 : 30,
+        paddingHorizontal: spacing.md,
+        paddingBottom: spacing.md,
+        borderBottomLeftRadius: 20,
+        borderBottomRightRadius: 20,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 5,
+        shadowRadius: 4,
+        elevation: 3,
         zIndex: 1,
     },
     headerContent: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: spacing.lg,
+        marginBottom: spacing.md,
     },
     headerTitle: {
-        fontSize: 22,
+        fontSize: 18,
         fontWeight: 'bold',
         color: '#FFF',
     },
     headerSubtitle: {
-        fontSize: 14,
+        fontSize: 12,
         color: 'rgba(255,255,255,0.9)',
-        marginTop: 2,
     },
     refreshBtn: {
-        padding: 8,
+        padding: 6,
         backgroundColor: 'rgba(255,255,255,0.2)',
-        borderRadius: 12,
+        borderRadius: 8,
+    },
+    filterBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.25)',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+        gap: 4,
+    },
+    filterBadgeText: {
+        fontSize: 9,
+        color: '#FFF',
+        fontWeight: '700',
+        textTransform: 'uppercase',
     },
     searchBar: {
         backgroundColor: 'rgba(255,255,255,0.15)',
-        borderRadius: 15,
-        marginBottom: spacing.lg,
-        height: 45,
+        borderRadius: 12,
+        marginBottom: spacing.sm,
+        height: 40,
     },
     searchInput: {
         color: '#FFF',
-        fontSize: 14,
+        fontSize: 13,
+        minHeight: 0,
+    },
+    // Monitoring Chart Styles
+    chartSurface: {
+        backgroundColor: 'transparent',
+        marginTop: 4,
+    },
+    chartRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 20,
+    },
+    chartLegend: {
+        gap: 4,
+    },
+    legendItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingVertical: 2,
+        paddingHorizontal: 6,
+        borderRadius: 6,
+    },
+    legendItemActive: {
+        backgroundColor: 'rgba(255,255,255,0.15)',
+    },
+    legendDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+    },
+    legendLabel: {
+        fontSize: 11,
+        color: 'rgba(255,255,255,0.9)',
+        fontWeight: '600',
+    },
+    hintContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 8,
+        paddingVertical: 4,
+        paddingHorizontal: 10,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: 8,
+        gap: 6,
+        alignSelf: 'center',
+    },
+    hintText: {
+        fontSize: 10,
+        color: 'rgba(255,255,255,0.9)',
+        fontWeight: '500',
     },
     statsRow: {
         flexDirection: 'row',
@@ -305,84 +440,96 @@ const styles = StyleSheet.create({
     },
     card: {
         backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 16,
-        ...shadows.sm,
+        borderRadius: 12,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: '#F1F5F9', // Very subtle border
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05, // Very soft shadow
+        shadowRadius: 2,
+        elevation: 1,
     },
-    cardHeader: {
+    cardMain: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    cardLeft: {
         flexDirection: 'row',
         alignItems: 'center',
-    },
-    avatarContainer: {
-        position: 'relative',
-    },
-    onlineBadge: {
-        position: 'absolute',
-        bottom: 0,
-        right: 0,
-        width: 14,
-        height: 14,
-        borderRadius: 7,
-        backgroundColor: colors.success,
-        borderWidth: 2,
-        borderColor: '#FFF',
-    },
-    cardInfo: {
         flex: 1,
+    },
+    cardTexts: {
         marginLeft: 12,
+        flex: 1,
+    },
+    cardRight: {
+        alignItems: 'flex-end',
+        justifyContent: 'center',
     },
     nameText: {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '700',
         color: colors.textPrimary,
         marginBottom: 2,
     },
-    roleContainer: {
+    roleText: {
+        fontSize: 11, // Smaller for minimalist look
+        color: colors.textSecondary,
+    },
+    statusPill: {
         flexDirection: 'row',
         alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 100, // Fully rounded
+        marginBottom: 2,
     },
-    roleText: {
-        fontSize: 12,
-        color: colors.textSecondary,
-        marginLeft: 4,
-    },
-    statusBadge: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 8,
+    statusDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        marginRight: 6,
     },
     statusText: {
-        fontSize: 12,
+        fontSize: 10,
+        fontWeight: '700',
+    },
+    overtimeText: {
+        fontSize: 9,
+        color: '#9333EA',
         fontWeight: '600',
+        marginTop: 2,
     },
-    divider: {
-        height: 1,
-        backgroundColor: colors.divider,
-        marginVertical: 12,
-    },
-    timeContainer: {
+    cardFooter: {
         flexDirection: 'row',
-        justifyContent: 'space-around',
+        backgroundColor: '#F8FAFC', // Light blue-grey bg
+        borderRadius: 8,
+        padding: 8,
         alignItems: 'center',
     },
     timeBox: {
-        alignItems: 'center',
         flex: 1,
-    },
-    verticalDivider: {
-        width: 1,
-        height: 24,
-        backgroundColor: colors.divider,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
     },
     timeLabel: {
         fontSize: 11,
-        color: colors.textMuted,
-        marginBottom: 2,
+        color: colors.textSecondary,
     },
     timeValue: {
-        fontSize: 14,
+        fontSize: 12,
         fontWeight: '600',
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    },
+    timeDivider: {
+        width: 1,
+        height: 16,
+        backgroundColor: '#E2E8F0',
     },
     emptyContainer: {
         alignItems: 'center',

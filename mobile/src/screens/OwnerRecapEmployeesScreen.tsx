@@ -1,13 +1,20 @@
 // d:\AHMAD MUZAYYIN\ChikoAttendance\mobile\src\screens\OwnerRecapEmployeesScreen.tsx
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
-import { Text, Surface, Avatar, ActivityIndicator, Searchbar, Button } from 'react-native-paper';
+import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, StatusBar, ScrollView } from 'react-native';
+import { Text, Surface, Avatar, ActivityIndicator, Searchbar, Button, Portal, Dialog, Chip } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { API_CONFIG, ENDPOINTS } from '../config/api';
 import { colors, spacing, borderRadius, shadows } from '../theme/theme';
+
+const months = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+];
+
+type AttendanceFilter = 'ALL' | 'HADIR' | 'TELAT' | 'IZIN' | 'ALPHA';
 
 export default function OwnerRecapEmployeesScreen() {
     const navigation = useNavigation<any>();
@@ -17,6 +24,13 @@ export default function OwnerRecapEmployeesScreen() {
     const [employees, setEmployees] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedFilter, setSelectedFilter] = useState<AttendanceFilter>('ALL');
+    const [month, setMonth] = useState(new Date().getMonth() + 1);
+    const [year, setYear] = useState(new Date().getFullYear());
+    const [showMonthPicker, setShowMonthPicker] = useState(false);
+    const [tempMonth, setTempMonth] = useState(month);
+    const [tempYear, setTempYear] = useState(year);
+    const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
 
     const fetchEmployees = async () => {
         setLoading(true);
@@ -40,11 +54,11 @@ export default function OwnerRecapEmployeesScreen() {
             const employeesWithStats = await Promise.all(
                 filtered.map(async (employee: any) => {
                     try {
-                        // Fetch attendance for current month
+                        // Fetch attendance for selected month
                         const attendanceRes = await axios.get(
                             `${API_CONFIG.BASE_URL}/admin/attendance/${employee.id}`,
                             {
-                                params: { month: currentMonth, year: currentYear },
+                                params: { month, year },
                                 headers: { Authorization: `Bearer ${token}` }
                             }
                         );
@@ -108,11 +122,18 @@ export default function OwnerRecapEmployeesScreen() {
     useEffect(() => {
         navigation.setOptions({ title: `Karyawan - ${branchName}` });
         fetchEmployees();
-    }, [branchId]);
+    }, [branchId, month, year]);
 
-    const filteredList = employees.filter((u: any) =>
-        u.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const filteredList = employees
+        .filter((u: any) => u.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        .filter((u: any) => {
+            if (selectedFilter === 'ALL') return true;
+            if (selectedFilter === 'HADIR') return (u.stats?.hadir || 0) > 0 && (u.stats?.telat || 0) === 0;
+            if (selectedFilter === 'TELAT') return (u.stats?.telat || 0) > 0;
+            if (selectedFilter === 'IZIN') return (u.stats?.izin || 0) > 0;
+            if (selectedFilter === 'ALPHA') return (u.stats?.alpha || 0) > 0;
+            return true;
+        });
 
     const renderItem = ({ item }: { item: any }) => (
         <TouchableOpacity
@@ -178,7 +199,29 @@ export default function OwnerRecapEmployeesScreen() {
 
     return (
         <View style={styles.container}>
-            <View style={styles.headerContainer}>
+            {/* Modern Filter Header */}
+            <Surface style={styles.headerSurface} elevation={2}>
+                <TouchableOpacity
+                    onPress={() => {
+                        setTempMonth(month);
+                        setTempYear(year);
+                        setShowMonthPicker(true);
+                    }}
+                    style={styles.pickerTrigger}
+                >
+                    <View style={styles.pickerIcon}>
+                        <MaterialCommunityIcons name="calendar-range" size={24} color={colors.primary} />
+                    </View>
+                    <View>
+                        <Text style={styles.pickerLabel}>Periode Absensi</Text>
+                        <Text style={styles.pickerValue}>{months[month - 1]} {year}</Text>
+                    </View>
+                    <MaterialCommunityIcons name="chevron-down" size={20} color={colors.textMuted} style={{ marginLeft: 'auto' }} />
+                </TouchableOpacity>
+            </Surface>
+
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
                 <Searchbar
                     placeholder="Cari Karyawan..."
                     onChangeText={setSearchQuery}
@@ -188,6 +231,59 @@ export default function OwnerRecapEmployeesScreen() {
                     iconColor={colors.primary}
                 />
             </View>
+
+            {/* Filter Chips */}
+            {/* <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterChipsContainer}
+            >
+                <Chip
+                    selected={selectedFilter === 'ALL'}
+                    onPress={() => setSelectedFilter('ALL')}
+                    style={[styles.filterChip, selectedFilter === 'ALL' && styles.filterChipActive]}
+                    textStyle={[styles.filterChipText, selectedFilter === 'ALL' && styles.filterChipTextActive]}
+                    icon="filter-variant"
+                >
+                    Semua
+                </Chip>
+                <Chip
+                    selected={selectedFilter === 'HADIR'}
+                    onPress={() => setSelectedFilter('HADIR')}
+                    style={[styles.filterChip, selectedFilter === 'HADIR' && { backgroundColor: colors.success }]}
+                    textStyle={[styles.filterChipText, selectedFilter === 'HADIR' && { color: '#FFF' }]}
+                    icon="check-circle"
+                >
+                    Hadir
+                </Chip>
+                <Chip
+                    selected={selectedFilter === 'TELAT'}
+                    onPress={() => setSelectedFilter('TELAT')}
+                    style={[styles.filterChip, selectedFilter === 'TELAT' && { backgroundColor: colors.warning }]}
+                    textStyle={[styles.filterChipText, selectedFilter === 'TELAT' && { color: '#FFF' }]}
+                    icon="clock-alert"
+                >
+                    Terlambat
+                </Chip>
+                <Chip
+                    selected={selectedFilter === 'IZIN'}
+                    onPress={() => setSelectedFilter('IZIN')}
+                    style={[styles.filterChip, selectedFilter === 'IZIN' && { backgroundColor: '#2196F3' }]}
+                    textStyle={[styles.filterChipText, selectedFilter === 'IZIN' && { color: '#FFF' }]}
+                    icon="file-document"
+                >
+                    Izin
+                </Chip>
+                <Chip
+                    selected={selectedFilter === 'ALPHA'}
+                    onPress={() => setSelectedFilter('ALPHA')}
+                    style={[styles.filterChip, selectedFilter === 'ALPHA' && { backgroundColor: colors.error }]}
+                    textStyle={[styles.filterChipText, selectedFilter === 'ALPHA' && { color: '#FFF' }]}
+                    icon="close-circle"
+                >
+                    Alpha
+                </Chip>
+            </ScrollView> */}
 
             <FlatList
                 data={filteredList}
@@ -207,6 +303,54 @@ export default function OwnerRecapEmployeesScreen() {
                     ) : null
                 }
             />
+
+            {/* Month/Year Picker Dialog */}
+            <Portal>
+                <Dialog visible={showMonthPicker} onDismiss={() => setShowMonthPicker(false)} style={styles.dialog}>
+                    <Dialog.Title style={styles.dialogTitle}>Pilih Periode</Dialog.Title>
+                    <Dialog.Content>
+                        <Text style={styles.dialogLabel}>Tahun</Text>
+                        <View style={styles.yearGrid}>
+                            {years.map(y => (
+                                <TouchableOpacity
+                                    key={y}
+                                    style={[styles.yearItem, tempYear === y && styles.yearItemActive]}
+                                    onPress={() => setTempYear(y)}
+                                >
+                                    <Text style={[styles.yearText, tempYear === y && styles.yearTextActive]}>{y}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <Text style={[styles.dialogLabel, { marginTop: 20 }]}>Bulan</Text>
+                        <View style={styles.monthGrid}>
+                            {months.map((m, i) => (
+                                <TouchableOpacity
+                                    key={i}
+                                    style={[styles.monthItem, tempMonth === i + 1 && styles.monthItemActive]}
+                                    onPress={() => setTempMonth(i + 1)}
+                                >
+                                    <Text style={[styles.monthText, tempMonth === i + 1 && styles.monthTextActive]}>{m.substring(0, 3)}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </Dialog.Content>
+                    <Dialog.Actions style={styles.dialogActions}>
+                        <Button onPress={() => setShowMonthPicker(false)} textColor={colors.textMuted}>Batal</Button>
+                        <Button
+                            mode="contained"
+                            onPress={() => {
+                                setMonth(tempMonth);
+                                setYear(tempYear);
+                                setShowMonthPicker(false);
+                            }}
+                            style={styles.applyBtn}
+                        >
+                            Terapkan
+                        </Button>
+                    </Dialog.Actions>
+                </Dialog>
+            </Portal>
         </View>
     );
 }
@@ -218,6 +362,7 @@ const styles = StyleSheet.create({
     },
     headerContainer: {
         padding: spacing.lg,
+        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + spacing.md : 20,
         backgroundColor: colors.surface,
         borderBottomLeftRadius: 24,
         borderBottomRightRadius: 24,
@@ -327,5 +472,147 @@ const styles = StyleSheet.create({
         marginTop: 4,
         fontSize: 14,
         color: colors.textSecondary,
+    },
+    // New Filter Styles
+    headerSurface: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: spacing.md,
+        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + spacing.sm : 20,
+        backgroundColor: 'white',
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        marginHorizontal: 2,
+        marginBottom: spacing.sm,
+    },
+    pickerTrigger: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    pickerIcon: {
+        width: 45,
+        height: 45,
+        borderRadius: 14,
+        backgroundColor: `${colors.primary}10`,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    pickerLabel: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: colors.textMuted,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+    },
+    pickerValue: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: colors.textPrimary,
+    },
+    searchContainer: {
+        paddingHorizontal: spacing.lg,
+        marginBottom: spacing.sm,
+    },
+    filterChipsContainer: {
+        paddingHorizontal: spacing.lg,
+        paddingBottom: spacing.sm,
+        gap: 8,
+    },
+    filterChip: {
+        marginRight: 8,
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.divider,
+    },
+    filterChipActive: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
+    },
+    filterChipText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: colors.textPrimary,
+    },
+    filterChipTextActive: {
+        color: '#FFF',
+    },
+    // Dialog Styles
+    dialog: {
+        borderRadius: 25,
+        backgroundColor: 'white',
+    },
+    dialogTitle: {
+        textAlign: 'center',
+        fontSize: 20,
+        fontWeight: 'bold',
+    },
+    dialogLabel: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: colors.textSecondary,
+        marginBottom: 10,
+        marginLeft: 5,
+    },
+    yearGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+    },
+    yearItem: {
+        width: '31%',
+        paddingVertical: 8,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: colors.divider,
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    yearItemActive: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
+    },
+    yearText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.textPrimary,
+    },
+    yearTextActive: {
+        color: 'white',
+    },
+    monthGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+    },
+    monthItem: {
+        width: '23%',
+        paddingVertical: 10,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: colors.divider,
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    monthItemActive: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
+    },
+    monthText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: colors.textPrimary,
+    },
+    monthTextActive: {
+        color: 'white',
+    },
+    dialogActions: {
+        paddingHorizontal: 20,
+        paddingBottom: 20,
+    },
+    applyBtn: {
+        borderRadius: 12,
+        paddingHorizontal: 20,
     },
 });

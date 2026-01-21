@@ -1,6 +1,6 @@
 // d:\AHMAD MUZAYYIN\ChikoAttendance\mobile\src\screens\OwnerRecapDetailScreen.tsx
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Dimensions, TouchableOpacity, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Dimensions, TouchableOpacity, Image, StatusBar } from 'react-native';
 import { Text, Surface, ActivityIndicator, Button, Portal, Dialog, RadioButton, Modal } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import axios from 'axios';
@@ -8,6 +8,7 @@ import * as SecureStore from 'expo-secure-store';
 import { API_CONFIG } from '../config/api';
 import { colors, spacing, borderRadius, shadows } from '../theme/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { PieChart } from 'react-native-gifted-charts';
 
 const months = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -64,19 +65,31 @@ export default function OwnerRecapDetailScreen() {
     attendances.forEach(att => {
         const dateKey = new Date(att.timestamp).toLocaleDateString('id-ID');
         if (!groupedData[dateKey]) groupedData[dateKey] = { date: att.timestamp };
+
         if (att.type === 'CHECK_IN') {
-            // For Check-IN: Since data is DESC (latest first), we want the execution to overwrite until the last one (earliest time).
-            // So 'always overwrite' is correct for finding the earliest Check-In.
             groupedData[dateKey].checkIn = att.timestamp;
             groupedData[dateKey].checkInFormatted = att.timestampFormatted;
             groupedData[dateKey].isLate = att.isLate;
-        } else {
-            // For Check-OUT: We want the LATEST time (first one in DESC array).
-            // So ONLY set if not already set.
+            groupedData[dateKey].checkInPhoto = att.photoUrl;
+            groupedData[dateKey].checkInLocation = { lat: att.latitude, lng: att.longitude };
+            groupedData[dateKey].checkInNotes = att.notes;
+        } else if (att.type === 'CHECK_OUT') {
             if (!groupedData[dateKey].checkOut) {
                 groupedData[dateKey].checkOut = att.timestamp;
                 groupedData[dateKey].checkOutFormatted = att.timestampFormatted;
+                groupedData[dateKey].checkOutPhoto = att.photoUrl;
+                groupedData[dateKey].checkOutLocation = { lat: att.latitude, lng: att.longitude };
+                groupedData[dateKey].checkOutNotes = att.notes;
             }
+        } else if (att.type === 'ALPHA') {
+            groupedData[dateKey].isAlpha = true;
+            groupedData[dateKey].alphaNotes = att.notes;
+        } else if (att.type === 'PERMIT') {
+            groupedData[dateKey].isPermit = true;
+            groupedData[dateKey].permitNotes = att.notes;
+        } else if (att.type === 'SICK') {
+            groupedData[dateKey].isSick = true;
+            groupedData[dateKey].sickNotes = att.notes;
         }
     });
 
@@ -113,6 +126,72 @@ export default function OwnerRecapDetailScreen() {
                 contentContainerStyle={styles.scrollContent}
                 refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchAttendance} colors={[colors.primary]} />}
             >
+                {/* Monthly Summary Chart for Owner */}
+                {!loading && items.length > 0 && (
+                    <Surface style={styles.summaryChartCard} elevation={2}>
+                        <View style={styles.chartTitleContainer}>
+                            <Text style={styles.chartTitleText}>Ringkasan {months[month - 1]}</Text>
+                        </View>
+                        <View style={styles.chartWrapper}>
+                            <PieChart
+                                data={[
+                                    {
+                                        value: items.filter((i: any) => i.checkIn && !i.isLate && !i.isAlpha).length,
+                                        color: colors.success,
+                                        gradientCenterColor: colors.success
+                                    },
+                                    {
+                                        value: items.filter((i: any) => i.isLate).length,
+                                        color: colors.warning,
+                                        gradientCenterColor: colors.warning
+                                    },
+                                    {
+                                        value: items.filter((i: any) => i.isAlpha).length,
+                                        color: colors.error,
+                                        gradientCenterColor: colors.error
+                                    },
+                                    {
+                                        value: items.filter((i: any) => i.isPermit || i.isSick).length,
+                                        color: colors.textMuted,
+                                        gradientCenterColor: '#94A3B8'
+                                    },
+                                ]}
+                                donut
+                                radius={60}
+                                innerRadius={45}
+                                innerCircleColor={'#FFFFFF'}
+                                centerLabelComponent={() => {
+                                    const total = items.length;
+                                    return (
+                                        <View style={{ alignItems: 'center' }}>
+                                            <Text style={{ fontSize: 16, fontWeight: 'bold', color: colors.primary }}>{total}</Text>
+                                            <Text style={{ fontSize: 8, color: colors.textSecondary }}>HARI</Text>
+                                        </View>
+                                    );
+                                }}
+                            />
+                            <View style={styles.chartLegend}>
+                                <View style={styles.legendItem}>
+                                    <View style={[styles.legendDot, { backgroundColor: colors.success }]} />
+                                    <Text style={styles.legendText}>Tepat Waktu: {items.filter((i: any) => i.checkIn && !i.isLate && !i.isAlpha).length}</Text>
+                                </View>
+                                <View style={styles.legendItem}>
+                                    <View style={[styles.legendDot, { backgroundColor: colors.warning }]} />
+                                    <Text style={styles.legendText}>Terlambat: {items.filter((i: any) => i.isLate).length}</Text>
+                                </View>
+                                <View style={styles.legendItem}>
+                                    <View style={[styles.legendDot, { backgroundColor: colors.error }]} />
+                                    <Text style={styles.legendText}>Alpha: {items.filter((i: any) => i.isAlpha).length}</Text>
+                                </View>
+                                <View style={styles.legendItem}>
+                                    <View style={[styles.legendDot, { backgroundColor: colors.textMuted }]} />
+                                    <Text style={styles.legendText}>Izin/Sakit: {items.filter((i: any) => i.isPermit || i.isSick).length}</Text>
+                                </View>
+                            </View>
+                        </View>
+                    </Surface>
+                )}
+
                 {loading && items.length === 0 ? (
                     <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
                 ) : items.length === 0 ? (
@@ -152,34 +231,53 @@ export default function OwnerRecapDetailScreen() {
                                     </View>
                                     <View style={{ flexDirection: 'column', alignItems: 'flex-end' }}>
                                         {item.isLate && <View style={styles.lateStatus}><Text style={styles.lateStatusText}>TERLAMBAT</Text></View>}
-                                        {hasCheckOutOnly && !isAlphaCheckout && (
+                                        {hasCheckOutOnly && !item.isAlpha && !item.isPermit && !item.isSick && (
                                             <View style={[styles.anomalyBadge, { marginTop: item.isLate ? 4 : 0 }]}>
                                                 <Text style={styles.anomalyBadgeText}>🚫 DATA TIDAK VALID</Text>
                                             </View>
                                         )}
-                                        {isAlphaCheckout && (
+                                        {item.isAlpha && (
                                             <View style={[styles.alphaBadgeOwner, { marginTop: item.isLate ? 4 : 0 }]}>
-                                                <Text style={styles.alphaBadgeOwnerText}>🔴 ALPHA (SISTEM)</Text>
+                                                <Text style={styles.alphaBadgeOwnerText}>🔴 ALPHA</Text>
+                                            </View>
+                                        )}
+                                        {item.isPermit && (
+                                            <View style={[styles.permitBadge, { marginTop: item.isLate ? 4 : 0 }]}>
+                                                <Text style={styles.permitText}>🟡 IZIN</Text>
+                                            </View>
+                                        )}
+                                        {item.isSick && (
+                                            <View style={[styles.sickBadge, { marginTop: item.isLate ? 4 : 0 }]}>
+                                                <Text style={styles.sickText}>🟢 SAKIT</Text>
                                             </View>
                                         )}
                                     </View>
                                 </View>
 
-                                {/* Alert untuk berbagai kasus */}
-                                {isAlphaCheckout && (
+                                {/* Alerts */}
+                                {item.isAlpha && (
                                     <View style={[styles.anomalyAlert, { backgroundColor: '#FEE2E2' }]}>
                                         <MaterialCommunityIcons name="alert-circle" size={14} color={colors.error} />
                                         <Text style={styles.anomalyAlertText}>
-                                            Tidak absen sama sekali dalam sehari. Status ditandai otomatis oleh sistem pada jam 23:55.
+                                            Tidak absen. Sistem menandai sebagai Alpha. {item.alphaNotes ? `Catatan: ${item.alphaNotes}` : ''}
                                         </Text>
                                     </View>
                                 )}
 
-                                {hasCheckOutOnly && !isAlphaCheckout && (
+                                {(item.isPermit || item.isSick) && (
+                                    <View style={[styles.anomalyAlert, { backgroundColor: item.isSick ? '#DCFCE7' : '#FEF3C7' }]}>
+                                        <MaterialCommunityIcons name="file-document-outline" size={14} color={item.isSick ? colors.success : colors.warning} />
+                                        <Text style={[styles.anomalyAlertText, { color: item.isSick ? colors.success : colors.warning }]}>
+                                            {item.isSick ? 'Sakit' : 'Izin'} {item.isSick ? item.sickNotes : item.permitNotes}
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {hasCheckOutOnly && !item.isAlpha && !item.isPermit && !item.isSick && (
                                     <View style={styles.anomalyAlert}>
                                         <MaterialCommunityIcons name="alert-octagon" size={14} color={colors.error} />
                                         <Text style={styles.anomalyAlertText}>
-                                            Data tidak valid: Tercatat absen pulang tanpa absen masuk. Kemungkinan error sistem atau manipulasi data.
+                                            Data tidak valid: Tercatat absen pulang tanpa absen masuk.
                                         </Text>
                                     </View>
                                 )}
@@ -188,13 +286,13 @@ export default function OwnerRecapDetailScreen() {
 
                                 <View style={styles.timeRow}>
                                     <View style={[styles.timeSlot, { borderRightWidth: 1, borderRightColor: colors.divider }]}>
-                                        <MaterialCommunityIcons name="clock-in" size={18} color={hasCheckOutOnly ? colors.textMuted : colors.success} />
+                                        <MaterialCommunityIcons name="clock-in" size={18} color={hasCheckOutOnly && !item.isAlpha ? colors.textMuted : colors.success} />
                                         <View style={{ marginLeft: 10 }}>
                                             <Text style={styles.slotLabel}>Masuk</Text>
-                                            <Text style={[styles.slotValue, hasCheckOutOnly && styles.missingValue]}>
+                                            <Text style={[styles.slotValue, (hasCheckOutOnly || item.isAlpha) && styles.missingValue]}>
                                                 {item.checkInFormatted || (item.checkIn ? new Date(item.checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--')}
                                             </Text>
-                                            {hasCheckOutOnly && <Text style={styles.missingLabel}>✗ Tidak ada</Text>}
+                                            {item.isAlpha && <Text style={styles.missingLabel}>Absen</Text>}
                                         </View>
                                     </View>
                                     <View style={styles.timeSlot}>
@@ -210,7 +308,6 @@ export default function OwnerRecapDetailScreen() {
 
                                 {/* Photo Buttons */}
                                 <View style={styles.photoButtonsRow}>
-                                    {/* Check-In Photo - Always show button */}
                                     <TouchableOpacity
                                         style={[styles.photoButton, { flex: 1, marginRight: 4 }]}
                                         onPress={() => setPhotoModal({
@@ -234,7 +331,6 @@ export default function OwnerRecapDetailScreen() {
                                         </Text>
                                     </TouchableOpacity>
 
-                                    {/* Check-Out Photo - Always show button */}
                                     <TouchableOpacity
                                         style={[styles.photoButton, { flex: 1, marginLeft: 4 }]}
                                         onPress={() => setPhotoModal({
@@ -345,7 +441,7 @@ export default function OwnerRecapDetailScreen() {
                         ) : (
                             <View style={styles.noPhotoView}>
                                 <MaterialCommunityIcons name="image-off" size={60} color={colors.textMuted} />
-                                <Text style={styles.noPhotoViewText}>Foto tidak tersedia</Text>
+                                <Text style={styles.noPhotoViewText}>Tidak ada foto dilampirkan</Text>
                             </View>
                         )}
 
@@ -404,6 +500,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         padding: spacing.md,
+        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + spacing.sm : 20,
         backgroundColor: 'white',
         borderBottomLeftRadius: 24,
         borderBottomRightRadius: 24,
@@ -674,29 +771,54 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: colors.error,
     },
+    alphaBadgeOwnerText: {
+        fontSize: 9,
+        fontWeight: 'bold',
+        color: colors.error,
+    },
+    permitBadge: {
+        backgroundColor: '#FEF3C7',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    permitText: {
+        fontSize: 9,
+        fontWeight: 'bold',
+        color: colors.warning,
+    },
+    sickBadge: {
+        backgroundColor: '#DCFCE7',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    sickText: {
+        fontSize: 9,
+        fontWeight: 'bold',
+        color: colors.success,
+    },
     // Photo Button Styles
     photoButtonsRow: {
         flexDirection: 'row',
         marginTop: 12,
-        paddingTop: 12,
-        borderTopWidth: 1,
-        borderTopColor: colors.divider,
+        justifyContent: 'space-between',
     },
     photoButton: {
-        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: `${colors.primary}10`,
         paddingVertical: 8,
         paddingHorizontal: 12,
+        backgroundColor: colors.surface,
         borderRadius: 8,
-        gap: 6,
+        borderWidth: 1,
+        borderColor: colors.divider,
     },
     photoButtonText: {
         fontSize: 12,
         fontWeight: '600',
-        color: colors.textPrimary,
+        marginLeft: 6,
     },
     noPhotoContainer: {
         flexDirection: 'row',
@@ -706,8 +828,6 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     noPhotoText: {
-        fontSize: 11,
-        color: colors.textMuted,
         fontStyle: 'italic',
     },
     // Photo Modal Styles
@@ -778,5 +898,48 @@ const styles = StyleSheet.create({
     photoCloseButton: {
         margin: 16,
         borderRadius: 12,
+    },
+    // Monthly Summary Chart Styles
+    summaryChartCard: {
+        backgroundColor: '#FFF',
+        borderRadius: 20,
+        padding: spacing.md,
+        marginBottom: spacing.lg,
+    },
+    chartTitleContainer: {
+        marginBottom: spacing.md,
+        borderLeftWidth: 4,
+        borderLeftColor: colors.primary,
+        paddingLeft: 10,
+    },
+    chartTitleText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: colors.textPrimary,
+    },
+    chartWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-around',
+    },
+    chartLegend: {
+        flex: 1,
+        marginLeft: 20,
+        gap: 8,
+    },
+    legendItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    legendDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+    },
+    legendText: {
+        fontSize: 12,
+        color: colors.textSecondary,
+        fontWeight: '500',
     },
 });

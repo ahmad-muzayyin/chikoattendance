@@ -15,7 +15,14 @@ import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 export default function AddBranchScreen() {
     const navigation = useNavigation();
     const route = useRoute();
-    const editingBranch = (route.params as any)?.branch;
+    const params = route.params as any || {};
+    const editingBranch = params.branch;
+
+    const safeParseFloat = (val: any, fallback: number) => {
+        if (val === null || val === undefined || val === '') return fallback;
+        const parsed = parseFloat(val.toString());
+        return isNaN(parsed) ? fallback : parsed;
+    };
 
     const [name, setName] = useState(editingBranch?.name || '');
     const [address, setAddress] = useState(editingBranch?.address || '');
@@ -30,6 +37,14 @@ export default function AddBranchScreen() {
     const [loading, setLoading] = useState(false);
     const [locationLoading, setLocationLoading] = useState(false);
 
+    // Map Region State (Decoupled from Marker Coordinates)
+    const [region, setRegion] = useState({
+        latitude: safeParseFloat(editingBranch?.latitude, -6.2088),
+        longitude: safeParseFloat(editingBranch?.longitude, 106.8456),
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+    });
+
     // Search
     const [searchQuery, setSearchQuery] = useState('');
     const [searchLoading, setSearchLoading] = useState(false);
@@ -40,9 +55,14 @@ export default function AddBranchScreen() {
         try {
             const geocodedLocation = await Location.geocodeAsync(searchQuery);
             if (geocodedLocation.length > 0) {
-                const { latitude, longitude } = geocodedLocation[0];
                 setLatitude(latitude.toString());
                 setLongitude(longitude.toString());
+                setRegion({
+                    latitude,
+                    longitude,
+                    latitudeDelta: 0.005,
+                    longitudeDelta: 0.005,
+                });
             } else {
                 Alert.alert('Tidak Ditemukan', 'Lokasi tidak ditemukan. Coba kata kunci lain.');
             }
@@ -95,6 +115,12 @@ export default function AddBranchScreen() {
             let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
             setLatitude(location.coords.latitude.toString());
             setLongitude(location.coords.longitude.toString());
+            setRegion({
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+                latitudeDelta: 0.005,
+                longitudeDelta: 0.005,
+            });
         } catch (error) {
             Alert.alert('Error', 'Gagal mengambil lokasi.');
         } finally {
@@ -185,7 +211,7 @@ export default function AddBranchScreen() {
                                 onChangeText={setLatitude}
                                 mode="outlined"
                                 style={[styles.input, styles.flex1]}
-                                keyboardType="numeric"
+                                keyboardType="numbers-and-punctuation"
                                 outlineStyle={styles.inputOutline}
                             />
                             <TextInput
@@ -194,7 +220,7 @@ export default function AddBranchScreen() {
                                 onChangeText={setLongitude}
                                 mode="outlined"
                                 style={[styles.input, styles.flex1]}
-                                keyboardType="numeric"
+                                keyboardType="numbers-and-punctuation"
                                 outlineStyle={styles.inputOutline}
                             />
                         </View>
@@ -227,12 +253,8 @@ export default function AddBranchScreen() {
                             <MapView
                                 provider={PROVIDER_DEFAULT}
                                 style={styles.map}
-                                region={{
-                                    latitude: parseFloat(latitude) || -6.2088,
-                                    longitude: parseFloat(longitude) || 106.8456,
-                                    latitudeDelta: 0.005,
-                                    longitudeDelta: 0.005,
-                                }}
+                                region={region}
+                                onRegionChangeComplete={setRegion}
                                 onPress={(e) => {
                                     setLatitude(e.nativeEvent.coordinate.latitude.toString());
                                     setLongitude(e.nativeEvent.coordinate.longitude.toString());
@@ -240,8 +262,8 @@ export default function AddBranchScreen() {
                             >
                                 <Marker
                                     coordinate={{
-                                        latitude: parseFloat(latitude) || -6.2088,
-                                        longitude: parseFloat(longitude) || 106.8456,
+                                        latitude: safeParseFloat(latitude, -6.2088),
+                                        longitude: safeParseFloat(longitude, 106.8456),
                                     }}
                                     draggable
                                     title="Lokasi Outlet"

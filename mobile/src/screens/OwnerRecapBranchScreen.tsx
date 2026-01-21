@@ -1,6 +1,6 @@
 // d:\AHMAD MUZAYYIN\ChikoAttendance\mobile\src\screens\OwnerRecapBranchScreen.tsx
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, StatusBar } from 'react-native';
 import { Text, Surface, ActivityIndicator, Searchbar, Avatar } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -68,13 +68,17 @@ export default function OwnerRecapBranchScreen() {
 
     return (
         <View style={styles.container}>
-            <Searchbar
-                placeholder="Cari Outlet..."
-                onChangeText={setSearchQuery}
-                value={searchQuery}
-                style={styles.searchBar}
-                inputStyle={{ fontSize: 14 }}
-            />
+            <View style={styles.headerContainer}>
+                <Text style={styles.headerTitle}>Rekap Per Outlet</Text>
+                <Searchbar
+                    placeholder="Cari Outlet..."
+                    onChangeText={setSearchQuery}
+                    value={searchQuery}
+                    style={styles.searchBar}
+                    inputStyle={{ fontSize: 14 }}
+                    elevation={0}
+                />
+            </View>
 
             <FlatList
                 data={filteredBranches}
@@ -107,11 +111,26 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: colors.background,
     },
-    searchBar: {
-        margin: spacing.lg,
-        elevation: 2,
+    headerContainer: {
         backgroundColor: colors.surface,
+        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + spacing.sm : 20,
+        paddingHorizontal: spacing.lg,
+        paddingBottom: spacing.sm,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        ...shadows.sm,
+        marginBottom: spacing.md,
+    },
+    headerTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: colors.textPrimary,
+        marginBottom: spacing.md,
+    },
+    searchBar: {
+        backgroundColor: colors.background,
         borderRadius: borderRadius.lg,
+        height: 46,
     },
     listContent: {
         paddingHorizontal: spacing.lg,

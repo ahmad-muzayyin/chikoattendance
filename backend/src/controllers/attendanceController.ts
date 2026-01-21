@@ -501,10 +501,10 @@ export const getRecap = async (req: AuthRequest, res: Response) => {
             const startOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
             const endOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59);
 
+            // Fetch all relevant records for the month
             const attendances = await Attendance.findAll({
                 where: {
                     userId,
-                    type: AttendanceType.CHECK_IN,
                     timestamp: {
                         [Op.gte]: startOfMonth,
                         [Op.lte]: endOfMonth
@@ -512,8 +512,64 @@ export const getRecap = async (req: AuthRequest, res: Response) => {
                 }
             });
 
-            const onTime = attendances.filter(a => !a.isLate).length;
-            const late = attendances.filter(a => a.isLate).length;
+            // Group by Date for accurate status determination
+            const dailyStatus: Record<string, { hasCheckIn: boolean; isLate: boolean; hasAlpha: boolean; hasPermit: boolean; hasSick: boolean; autoAlpha: boolean }> = {};
+
+            attendances.forEach(att => {
+                const dateStr = new Date(att.timestamp).toISOString().split('T')[0];
+                if (!dailyStatus[dateStr]) {
+                    dailyStatus[dateStr] = {
+                        hasCheckIn: false,
+                        isLate: false,
+                        hasAlpha: false,
+                        hasPermit: false,
+                        hasSick: false,
+                        autoAlpha: false
+                    };
+                }
+
+                if (att.type === AttendanceType.CHECK_IN) {
+                    dailyStatus[dateStr].hasCheckIn = true;
+                    if (att.isLate) dailyStatus[dateStr].isLate = true;
+                } else if (att.type === AttendanceType.ALPHA) {
+                    dailyStatus[dateStr].hasAlpha = true;
+                } else if (att.type === AttendanceType.PERMIT) {
+                    dailyStatus[dateStr].hasPermit = true;
+                } else if (att.type === AttendanceType.SICK) {
+                    dailyStatus[dateStr].hasSick = true;
+                } else if (att.type === AttendanceType.CHECK_OUT) {
+                    // Check for Auto-Alpha (CheckOut at 23:55)
+                    const d = new Date(att.timestamp);
+                    // Force WIB check or simple hour/minute check (assuming server time is consistent with recording)
+                    // In DB timestamp is usually UTC. We should rely on stored time. 
+                    // However, for robustness, checking 23:55 local time (server time)
+                    // If we assume the app sent 23:55 local, and DB stores precise time.
+                    // Let's use getHours/getMinutes which uses server local time or UTC depending on config.
+                    // Better validation:
+                    if (d.getHours() === 23 && d.getMinutes() === 55) {
+                        dailyStatus[dateStr].autoAlpha = true;
+                    }
+                }
+            });
+
+            let onTime = 0;
+            let late = 0;
+            let off = 0;
+            let alpha = 0;
+
+            Object.values(dailyStatus).forEach(day => {
+                if (day.hasAlpha) {
+                    alpha++;
+                } else if (day.autoAlpha && !day.hasCheckIn) {
+                    // Implicit Alpha: Checkout at 23:55 without CheckIn
+                    alpha++;
+                } else if (day.hasPermit || day.hasSick) {
+                    off++;
+                } else if (day.hasCheckIn) {
+                    if (day.isLate) late++;
+                    else onTime++;
+                }
+            });
 
             const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
                 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -523,8 +579,9 @@ export const getRecap = async (req: AuthRequest, res: Response) => {
                 monthCode: `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`,
                 onTime,
                 late,
-                off: 0, // You can add logic for off days
-                holiday: 0 // You can add logic for holidays
+                off,
+                holiday: 0,
+                alpha
             });
         }
 

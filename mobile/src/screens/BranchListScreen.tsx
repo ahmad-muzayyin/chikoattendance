@@ -1,6 +1,6 @@
 // d:\AHMAD MUZAYYIN\ChikoAttendance\mobile\src\screens\BranchListScreen.tsx
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, Alert, RefreshControl, TouchableOpacity, Animated } from 'react-native';
+import { View, StyleSheet, FlatList, Alert, RefreshControl, TouchableOpacity, Animated, StatusBar } from 'react-native';
 import { Text, FAB, IconButton, ActivityIndicator, Surface, Searchbar } from 'react-native-paper';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import axios from 'axios';
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     },
     header: {
         paddingHorizontal: spacing.lg,
-        paddingTop: spacing.lg,
+        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + spacing.sm : 20,
         paddingBottom: spacing.md,
         backgroundColor: colors.surface,
         borderBottomLeftRadius: 24,

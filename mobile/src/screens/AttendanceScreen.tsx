@@ -63,13 +63,14 @@ export const AttendanceScreen = () => {
     const [refreshing, setRefreshing] = useState(false);
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [attendanceData, setAttendanceData] = useState<AttendanceDetail[]>([]);
-    const [stats, setStats] = useState({ onTime: 0, late: 0, off: 0, holiday: 0 });
+    const [stats, setStats] = useState({ onTime: 0, late: 0, off: 0, holiday: 0, alpha: 0 });
 
     const statusColors: Record<string, string> = {
         onTime: colors.success,
         late: colors.warning,
         off: colors.textMuted,
         holiday: colors.error,
+        alpha: colors.error, // Alpha is also red
     };
 
     const fetchAttendance = useCallback(async () => {
@@ -83,7 +84,7 @@ export const AttendanceScreen = () => {
             );
 
             const marks: MarkedDates = {};
-            const statsCount = { onTime: 0, late: 0, off: 0, holiday: 0 };
+            const statsCount = { onTime: 0, late: 0, off: 0, holiday: 0, alpha: 0 };
 
             data.forEach((item: any) => {
                 marks[item.date] = {
@@ -285,7 +286,8 @@ export const AttendanceScreen = () => {
                                         ]}>
                                             {selectedInfo.status === 'onTime' ? 'Tepat Waktu' :
                                                 selectedInfo.status === 'late' ? 'Terlambat' :
-                                                    selectedInfo.status === 'off' ? 'Cuti/Libur' : 'Tidak Hadir'}
+                                                    selectedInfo.status === 'off' ? 'Cuti/Libur' :
+                                                        selectedInfo.status === 'alpha' ? 'Alpha' : 'Tidak Hadir'}
                                         </Text>
                                     </View>
 
@@ -308,6 +310,15 @@ export const AttendanceScreen = () => {
                                     <View style={styles.notesContainer}>
                                         <Text style={styles.notesLabel}>Keterangan:</Text>
                                         <Text style={styles.notesValue}>{selectedInfo.notes}</Text>
+                                    </View>
+                                )}
+
+                                {selectedInfo.status === 'alpha' && (
+                                    <View style={[styles.notesContainer, { backgroundColor: '#FEE2E2' }]}>
+                                        <Text style={[styles.notesLabel, { color: colors.error }]}>Peringatan:</Text>
+                                        <Text style={[styles.notesValue, { color: colors.error }]}>
+                                            Anda tidak melakukan absensi pada hari ini.
+                                        </Text>
                                     </View>
                                 )}
 
@@ -364,6 +375,11 @@ export const AttendanceScreen = () => {
                             color={colors.error}
                             label="Hari Libur"
                             count={stats.holiday}
+                        />
+                        <LegendItem
+                            color={colors.error}
+                            label="Alpha"
+                            count={stats.alpha}
                         />
                     </View>
                 </View>
