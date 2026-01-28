@@ -18,7 +18,7 @@ export const login = async (req: Request, res: Response) => {
 
         // Include role in token for faster middleware checks
         const token = jwt.sign(
-            { id: user.id, role: user.role },
+            { id: user.id, role: user.role, branchId: user.branchId },
             process.env.JWT_SECRET || 'secret_key',
             { expiresIn: '7d' }
         );
