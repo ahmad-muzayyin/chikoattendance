@@ -63,6 +63,7 @@ export const AttendanceScreen = () => {
     const [refreshing, setRefreshing] = useState(false);
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [attendanceData, setAttendanceData] = useState<AttendanceDetail[]>([]);
+    const [eventsData, setEventsData] = useState<any[]>([]);
     const [stats, setStats] = useState({ onTime: 0, late: 0, off: 0, holiday: 0, alpha: 0 });
 
     const statusColors: Record<string, string> = {
@@ -70,23 +71,32 @@ export const AttendanceScreen = () => {
         late: colors.warning,
         off: colors.textMuted,
         holiday: colors.error,
-        alpha: colors.error, // Alpha is also red
+        alpha: colors.error,
+        event: '#EC4899', // Pink for special events
     };
 
     const fetchAttendance = useCallback(async () => {
         try {
             const token = await SecureStore.getItemAsync('authToken');
-            const { data } = await axios.get(
-                `${API_CONFIG.BASE_URL}${ENDPOINTS.CALENDAR}?deviceId=${Device.osVersion}`,
-                {
+
+            // Parallel Fetch: Attendance + Events
+            const [attendanceRes, eventsRes] = await Promise.all([
+                axios.get(`${API_CONFIG.BASE_URL}${ENDPOINTS.CALENDAR}?deviceId=${Device.osVersion}`, {
                     headers: { Authorization: `Bearer ${token}` }
-                }
-            );
+                }),
+                axios.get(`${API_CONFIG.BASE_URL}/events`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                }).catch(() => ({ data: [] })) // Fail gracefully
+            ]);
 
             const marks: MarkedDates = {};
             const statsCount = { onTime: 0, late: 0, off: 0, holiday: 0, alpha: 0 };
 
-            data.forEach((item: any) => {
+            // Maps for easy lookup
+            const eventMap: Record<string, any> = {};
+            eventsRes.data.forEach((e: any) => eventMap[e.date] = e);
+
+            attendanceRes.data.forEach((item: any) => {
                 marks[item.date] = {
                     marked: true,
                     dotColor: statusColors[item.status] || colors.primary,
@@ -96,8 +106,35 @@ export const AttendanceScreen = () => {
                 }
             });
 
+            // Overlay Events
+            eventsRes.data.forEach((e: any) => {
+                if (!marks[e.date]) {
+                    marks[e.date] = {
+                        marked: true,
+                        dotColor: '#EC4899', // Event Color
+                        customStyles: {
+                            container: {
+                                borderColor: '#EC4899',
+                                borderWidth: 1,
+                            }
+                        }
+                    };
+                } else {
+                    // If attendance exists, maybe add a visual cue or valid marker is enough
+                    // React Native Calendars supports multi-dot but sticking to simple dot for now
+                }
+            });
+
             setMarkedDates(marks);
-            setAttendanceData(data);
+
+            // Merge Data: Prioritize Attendance, but fallback to event info if date matches
+            // We'll store events separately or merged? 
+            // Better to keep attendanceData as is, and use a separate state or helper for events.
+            // Let's attach events to attendanceData if missing? No, user might check attendance data.
+            // Let's store events in a state.
+            setEventsData(eventsRes.data);
+
+            setAttendanceData(attendanceRes.data);
             setStats(statsCount);
         } catch (e) {
             console.warn('Attendance fetch error', e);
@@ -175,7 +212,11 @@ export const AttendanceScreen = () => {
 
     const getSelectedDateInfo = () => {
         if (!selectedDate) return null;
-        return attendanceData.find(item => item.date === selectedDate);
+
+        const attendance = attendanceData.find(item => item.date === selectedDate);
+        const event = eventsData.find(e => e.date === selectedDate);
+
+        return { attendance, event };
     };
 
     if (loading) {
@@ -187,7 +228,7 @@ export const AttendanceScreen = () => {
         );
     }
 
-    const selectedInfo = getSelectedDateInfo();
+    const { attendance: selectedInfo, event: selectedEvent } = getSelectedDateInfo() || {};
 
     return (
         <View style={styles.container}>
@@ -269,6 +310,21 @@ export const AttendanceScreen = () => {
                                 year: 'numeric'
                             })}
                         </Text>
+
+                        {/* Event Detail */}
+                        {selectedEvent && (
+                            <View style={[styles.notesContainer, { backgroundColor: '#FDF2F8', marginBottom: 12 }]}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                    <MaterialCommunityIcons name="calendar-star" size={16} color="#EC4899" />
+                                    <Text style={[styles.notesLabel, { color: '#BE185D', marginLeft: 4, marginBottom: 0 }]}>Event Spesial</Text>
+                                </View>
+                                <Text style={[styles.notesValue, { fontWeight: 'bold', color: '#831843' }]}>{selectedEvent.name}</Text>
+                                {selectedEvent.description && (
+                                    <Text style={[styles.notesValue, { color: '#9D174D', fontSize: 13 }]}>{selectedEvent.description}</Text>
+                                )}
+                            </View>
+                        )}
+
                         {selectedInfo ? (
                             <View style={styles.detailContent}>
                                 <View style={styles.statusRow}>
@@ -336,16 +392,20 @@ export const AttendanceScreen = () => {
                             </View>
                         ) : (
                             <View>
-                                <Text style={styles.noDataText}>Tidak ada data kehadiran.</Text>
-                                {(selectedDate && new Date(selectedDate) >= new Date(new Date().setHours(0, 0, 0, 0))) && (
-                                    <Button
-                                        mode="contained"
-                                        onPress={() => setPermitDialogVisible(true)}
-                                        style={{ marginTop: 12, borderRadius: 8 }}
-                                        buttonColor={colors.primary}
-                                    >
-                                        Ajukan Izin
-                                    </Button>
+                                {!selectedEvent && (
+                                    <>
+                                        <Text style={styles.noDataText}>Tidak ada data kehadiran.</Text>
+                                        {(selectedDate && new Date(selectedDate) >= new Date(new Date().setHours(0, 0, 0, 0))) && (
+                                            <Button
+                                                mode="contained"
+                                                onPress={() => setPermitDialogVisible(true)}
+                                                style={{ marginTop: 12, borderRadius: 8 }}
+                                                buttonColor={colors.primary}
+                                            >
+                                                Ajukan Izin
+                                            </Button>
+                                        )}
+                                    </>
                                 )}
                             </View>
                         )}
