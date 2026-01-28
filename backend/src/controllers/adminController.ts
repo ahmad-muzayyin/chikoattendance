@@ -316,17 +316,23 @@ export const createUser = async (req: Request, res: Response) => {
         const passwordHash = await bcrypt.hash(password, 10);
 
         // Security: If creator is HEAD, force branchId to their own branch
-        // Note: 'req.user' isn't available here because this is adminController, usually open or strictly middleware checked.
-        // We should ensure the route is protected. Assuming 'req.user' exists via AuthRequest casting.
         const authReq = req as any;
         let finalBranchId = branchId;
 
         if (authReq.user && authReq.user.role === 'HEAD') {
+            // Fetch authenticated user to get reliable branchId
+            const requestingUser = await User.findByPk(authReq.user.id);
+
+            if (!requestingUser) {
+                return res.status(401).json({ message: 'User tidak ditemukan.' });
+            }
+
             // HEAD cannot create OWNER users
             if (role === 'OWNER') {
                 return res.status(403).json({ message: 'Anda tidak dapat membuat user dengan role OWNER.' });
             }
-            finalBranchId = authReq.user.branchId;
+
+            finalBranchId = requestingUser.branchId;
             if (!finalBranchId) return res.status(400).json({ message: 'Anda tidak memiliki cabang.' });
         }
 

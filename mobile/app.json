@@ -28,6 +28,11 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#EC1616"
       },
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAiaa3pD1NmlOd0UVUudS5hezR083O-LGo"
+        }
+      },
       "permissions": [
         "CAMERA",
         "ACCESS_FINE_LOCATION",

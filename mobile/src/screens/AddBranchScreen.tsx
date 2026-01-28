@@ -39,8 +39,8 @@ export default function AddBranchScreen() {
 
     // Map Region State (Decoupled from Marker Coordinates)
     const [region, setRegion] = useState({
-        latitude: safeParseFloat(editingBranch?.latitude, -6.2088),
-        longitude: safeParseFloat(editingBranch?.longitude, 106.8456),
+        latitude: safeParseFloat(editingBranch?.latitude, -6.2088) || -6.2088,
+        longitude: safeParseFloat(editingBranch?.longitude, 106.8456) || 106.8456,
         latitudeDelta: 0.005,
         longitudeDelta: 0.005,
     });
@@ -141,7 +141,7 @@ export default function AddBranchScreen() {
                 name, address,
                 latitude: parseFloat(latitude),
                 longitude: parseFloat(longitude),
-                radius: parseInt(radius),
+                radius: parseInt(radius) || 100,
                 startHour, endHour
             };
 
