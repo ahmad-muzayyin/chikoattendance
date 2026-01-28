@@ -162,14 +162,6 @@ export default function UserFormScreen() {
                 position: role === 'EMPLOYEE' ? position : null
             };
 
-            console.log('=== USER FORM DEBUG ===');
-            console.log('Is HEAD:', isHead);
-            console.log('Current User Branch:', currentUser?.branchId);
-            console.log('Editing User:', editingUser?.id);
-            console.log('Editing User Branch:', editingUser?.branchId);
-            console.log('Payload:', payload);
-            console.log('=====================');
-
             await axios[method](url, payload, { headers: { Authorization: `Bearer ${token}` } });
 
             // Show Custom Success Dialog
