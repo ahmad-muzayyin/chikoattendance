@@ -41,6 +41,38 @@ export const createEvent = async (req: Request, res: Response) => {
     }
 };
 
+export const updateEvent = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { name, date, description, isSpecialEvent } = req.body;
+
+        const event = await Event.findByPk(id);
+        if (!event) {
+            return res.status(404).json({ message: 'Event not found' });
+        }
+
+        // Check if date being changed to another existing event that is NOT this event
+        if (date && date !== event.date) {
+            const existing = await Event.findOne({ where: { date } });
+            if (existing) {
+                return res.status(400).json({ message: 'Another event already exists for this date' });
+            }
+        }
+
+        await event.update({
+            name,
+            date,
+            description,
+            isSpecialEvent
+        });
+
+        res.json(event);
+    } catch (error) {
+        console.error('Update event error:', error);
+        res.status(500).json({ message: 'Error updating event' });
+    }
+};
+
 export const deleteEvent = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;

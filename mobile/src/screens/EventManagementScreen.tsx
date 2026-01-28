@@ -17,6 +17,8 @@ export default function EventManagementScreen() {
 
     // Dialog State
     const [visible, setVisible] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [editId, setEditId] = useState<number | null>(null);
     const [eventName, setEventName] = useState('');
     const [eventDate, setEventDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
@@ -37,10 +39,6 @@ export default function EventManagementScreen() {
             setEvents(data);
         } catch (error) {
             console.log('Error fetching events', error);
-            // Mock data for UI demonstration if backend fails
-            // setEvents([
-            //     { id: 1, name: 'Big Sale 12.12', date: '2025-12-12', description: 'Buka 24 Jam' }
-            // ]);
         } finally {
             setLoading(false);
         }
@@ -54,23 +52,57 @@ export default function EventManagementScreen() {
 
         try {
             const token = await SecureStore.getItemAsync('authToken');
-            await axios.post(`${API_CONFIG.BASE_URL}/events`, {
-                name: eventName,
-                date: eventDate.toISOString().split('T')[0],
-                description: eventDescription,
-                isSpecialEvent: true // Flag to bypass schedule
-            }, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
 
-            Alert.alert('Sukses', 'Event berhasil dibuat');
+            if (isEditMode && editId) {
+                // Update Logic
+                await axios.put(`${API_CONFIG.BASE_URL}/events/${editId}`, {
+                    name: eventName,
+                    date: eventDate.toISOString().split('T')[0],
+                    description: eventDescription,
+                    isSpecialEvent: true
+                }, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                Alert.alert('Sukses', 'Event berhasil diperbarui');
+            } else {
+                // Create Logic
+                await axios.post(`${API_CONFIG.BASE_URL}/events`, {
+                    name: eventName,
+                    date: eventDate.toISOString().split('T')[0],
+                    description: eventDescription,
+                    isSpecialEvent: true // Flag to bypass schedule
+                }, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                Alert.alert('Sukses', 'Event berhasil dibuat');
+            }
             setVisible(false);
             setEventName('');
             setEventDescription('');
+            setIsEditMode(false);
+            setEditId(null);
             fetchEvents();
-        } catch (error) {
-            Alert.alert('Gagal', 'Gagal membuat event. Pastikan backend mendukung fitur ini.');
+        } catch (error: any) {
+            Alert.alert('Gagal', error.response?.data?.message || 'Gagal menyimpan event. Pastikan backend mendukung fitur ini.');
         }
+    };
+
+    const openEditModal = (item: any) => {
+        setEditId(item.id);
+        setEventName(item.name);
+        setEventDate(new Date(item.date));
+        setEventDescription(item.description || '');
+        setIsEditMode(true);
+        setVisible(true);
+    };
+
+    const resetModal = () => {
+        setVisible(false);
+        setEventName('');
+        setEventDate(new Date());
+        setEventDescription('');
+        setIsEditMode(false);
+        setEditId(null);
     };
 
     const handleDelete = async (id: number) => {
@@ -110,9 +142,15 @@ export default function EventManagementScreen() {
                     <Text style={styles.tagText}>Bypass Jadwal Shift</Text>
                 </View>
             </View>
-            <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
-                <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.error} />
-            </TouchableOpacity>
+
+            <View style={{ flexDirection: 'column', alignItems: 'center' }}>
+                <TouchableOpacity onPress={() => openEditModal(item)} style={styles.iconBtn}>
+                    <MaterialCommunityIcons name="pencil" size={20} color={colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleDelete(item.id)} style={[styles.iconBtn, { marginTop: 8 }]}>
+                    <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.error} />
+                </TouchableOpacity>
+            </View>
         </Surface>
     );
 
@@ -151,8 +189,8 @@ export default function EventManagementScreen() {
             />
 
             <Portal>
-                <Dialog visible={visible} onDismiss={() => setVisible(false)} style={{ backgroundColor: 'white', borderRadius: 16 }}>
-                    <Dialog.Title>Tambah Event Baru</Dialog.Title>
+                <Dialog visible={visible} onDismiss={resetModal} style={{ backgroundColor: 'white', borderRadius: 16 }}>
+                    <Dialog.Title>{isEditMode ? 'Edit Event' : 'Tambah Event Baru'}</Dialog.Title>
                     <Dialog.Content>
                         <TextInput
                             label="Nama Event"
@@ -203,7 +241,7 @@ export default function EventManagementScreen() {
                         </View>
                     </Dialog.Content>
                     <Dialog.Actions>
-                        <Button onPress={() => setVisible(false)} textColor="#64748B">Batal</Button>
+                        <Button onPress={resetModal} textColor="#64748B">Batal</Button>
                         <Button onPress={handleCreateEvent} mode="contained" style={{ marginLeft: 8 }}>Simpan</Button>
                     </Dialog.Actions>
                 </Dialog>
@@ -300,6 +338,11 @@ const styles = StyleSheet.create({
     },
     deleteBtn: {
         padding: 8,
+    },
+    iconBtn: {
+        padding: 8,
+        backgroundColor: '#F1F5F9',
+        borderRadius: 8,
     },
     fab: {
         position: 'absolute',
