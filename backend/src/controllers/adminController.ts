@@ -208,8 +208,22 @@ export const getDailyMonitoring = async (req: Request, res: Response) => {
         const maxPointsSetting = await Settings.findByPk('max_punishment_points');
         const maxPoints = maxPointsSetting ? parseInt(maxPointsSetting.value) : 50;
 
-        // Get all users
+        // Get auth user for scoping
+        const authReq = req as any;
+        const userWhere: any = {};
+
+        if (authReq.user && authReq.user.role === 'HEAD') {
+            const headUser = await User.findByPk(authReq.user.id);
+            if (headUser && headUser.branchId) {
+                userWhere.branchId = headUser.branchId;
+                // Exclude OWNER from monitoring view for HEAD
+                userWhere.role = { [Op.ne]: 'OWNER' };
+            }
+        }
+
+        // Get all users (scoped)
         const users = await User.findAll({
+            where: userWhere,
             attributes: ['id', 'name', 'role'],
             include: [{ model: Branch, attributes: ['name'] }]
         });

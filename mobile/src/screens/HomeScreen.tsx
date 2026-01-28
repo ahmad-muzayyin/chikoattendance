@@ -248,12 +248,12 @@ export default function HomeScreen() {
 
                     <View style={styles.row}>
                         <QuickAction
-                            icon={user?.role === 'OWNER' ? "clipboard-list" : "calendar-check"}
-                            title={user?.role === 'OWNER' ? "Monitoring Absensi" : "Kalender"}
-                            subtitle={user?.role === 'OWNER' ? "Status Kehadiran" : "Riwayat Absen"}
+                            icon={['OWNER', 'HEAD'].includes(user?.role || '') ? "clipboard-list" : "calendar-check"}
+                            title={['OWNER', 'HEAD'].includes(user?.role || '') ? "Monitoring Absensi" : "Kalender"}
+                            subtitle={['OWNER', 'HEAD'].includes(user?.role || '') ? "Status Kehadiran" : "Riwayat Absen"}
                             color={colors.primary}
                             onPress={() => {
-                                if (user?.role === 'OWNER') {
+                                if (['OWNER', 'HEAD'].includes(user?.role || '')) {
                                     navigation.navigate('EmployeeList');
                                 } else {
                                     navigation.navigate('AttendanceCalendar');
@@ -298,16 +298,18 @@ export default function HomeScreen() {
                         />
                     </View>
 
-                    {/* Owner Specific Menus */}
-                    {user?.role === 'OWNER' && (
+                    {/* Owner & Head Specific Menus */}
+                    {['OWNER', 'HEAD'].includes(user?.role || '') && (
                         <View style={[styles.row, { marginTop: spacing.md }]}>
-                            <QuickAction
-                                icon="store-search"
-                                title="Outlet"
-                                subtitle="Kelola Cabang"
-                                color={colors.info}
-                                onPress={() => navigation.navigate('BranchList')}
-                            />
+                            {user?.role === 'OWNER' && (
+                                <QuickAction
+                                    icon="store-search"
+                                    title="Outlet"
+                                    subtitle="Kelola Cabang"
+                                    color={colors.info}
+                                    onPress={() => navigation.navigate('BranchList')}
+                                />
+                            )}
                             <QuickAction
                                 icon="account-group"
                                 title="Karyawan"
