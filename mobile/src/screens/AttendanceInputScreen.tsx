@@ -57,6 +57,7 @@ export default function AttendanceInputScreen() {
     });
 
     const [todayCheckIn, setTodayCheckIn] = useState<Date | null>(null);
+    const [activeEvent, setActiveEvent] = useState<any>(null);
 
     // Initial Data Fetch
     useEffect(() => {
@@ -86,7 +87,28 @@ export default function AttendanceInputScreen() {
                 console.log('Failed to fetch branches');
             }
         };
+        const fetchTodayEvent = async () => {
+            try {
+                const token = await SecureStore.getItemAsync('authToken');
+                const { data } = await axios.get(`${API_CONFIG.BASE_URL}/events`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                // Find today's event
+                const todayStr = new Date().toISOString().split('T')[0];
+                const event = data.find((e: any) => e.date.startsWith(todayStr)); // Match generic date part
+
+                if (event) {
+                    setActiveEvent(event);
+                    setStatusMessage(`Event: ${event.name} (Bypass Jadwal)`);
+                }
+            } catch (error) {
+                console.log('No events found');
+            }
+        };
+
         fetchBranches();
+        fetchTodayEvent();
     }, []);
 
     const fetchTodayAttendance = async () => {
@@ -459,7 +481,18 @@ export default function AttendanceInputScreen() {
                     )}
                 </View>
 
-                {/* Location Status */}
+                {/* Event Banner */}
+                {activeEvent && (
+                    <Surface style={styles.eventBanner} elevation={2}>
+                        <MaterialCommunityIcons name="calendar-star" size={24} color="#FFF" />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={styles.eventTitle}>Event: {activeEvent.name}</Text>
+                            <Text style={styles.eventSub}>Mode Bebas Jadwal Aktif. Absensi dibuka 00:01.</Text>
+                        </View>
+                    </Surface>
+                )}
+
+                {/* Maps & Location Info */}
                 <View style={styles.locationCard}>
                     <View style={[styles.locationIndicator, { backgroundColor: location ? '#DCFCE7' : '#FEF2F2' }]}>
                         <MaterialCommunityIcons
@@ -502,34 +535,65 @@ export default function AttendanceInputScreen() {
                 </View>
 
                 {/* Action Buttons */}
+                {/* Action Buttons */}
                 <View style={styles.actionContainer}>
+                    {/* CHECK IN BUTTON */}
                     <TouchableOpacity
-                        style={[styles.actionBtn, styles.checkInBtn, (loading || !location) && styles.disabledBtn]}
+                        style={[
+                            styles.btnShadowContainer,
+                            (loading || !location || !!todayCheckIn) && styles.disabledBtn
+                        ]}
                         onPress={() => handleSubmit('CHECK_IN')}
-                        disabled={loading || !location}
-                        activeOpacity={0.8}
+                        disabled={loading || !location || !!todayCheckIn}
+                        activeOpacity={0.9}
                     >
-                        <View style={styles.btnIconBg}>
-                            <MaterialCommunityIcons name="login" size={24} color="#DC2626" />
-                        </View>
-                        <View>
-                            <Text style={styles.btnTitle}>MASUK</Text>
-                            <Text style={styles.btnSub}>Mulai Shift</Text>
+                        <View style={styles.btnOverflow}>
+                            <LinearGradient
+                                colors={!!todayCheckIn ? ['#94A3B8', '#64748B'] : ['#DC2626', '#B91C1C']} // Grey if done
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 0, y: 1 }}
+                                style={styles.actionBtnGradient}
+                            >
+                                <View style={styles.iconCircleWhite}>
+                                    <MaterialCommunityIcons name="login" size={24} color={!!todayCheckIn ? "#64748B" : "#DC2626"} />
+                                </View>
+                                <View style={styles.btnTextContainer}>
+                                    <Text style={styles.btnTitleMain}>MASUK</Text>
+                                    <Text style={styles.btnSubWhite}>
+                                        {todayCheckIn ? 'Sudah Absen' : 'Mulai Shift'}
+                                    </Text>
+                                </View>
+                            </LinearGradient>
                         </View>
                     </TouchableOpacity>
 
+                    {/* CHECK OUT BUTTON */}
                     <TouchableOpacity
-                        style={[styles.actionBtn, styles.checkOutBtn, (loading || !location) && styles.disabledBtn]}
+                        style={[
+                            styles.btnShadowContainer,
+                            (loading || !location || !todayCheckIn) && styles.disabledBtn
+                        ]}
                         onPress={() => handleSubmit('CHECK_OUT')}
-                        disabled={loading || !location}
-                        activeOpacity={0.8}
+                        disabled={loading || !location || !todayCheckIn}
+                        activeOpacity={0.9}
                     >
-                        <View style={[styles.btnIconBg, { backgroundColor: '#F3F4F6' }]}>
-                            <MaterialCommunityIcons name="logout" size={24} color="#4B5563" />
-                        </View>
-                        <View>
-                            <Text style={[styles.btnTitle, { color: '#374151' }]}>PULANG</Text>
-                            <Text style={styles.btnSub}>Akhiri Shift</Text>
+                        <View style={styles.btnOverflow}>
+                            <LinearGradient
+                                colors={!todayCheckIn ? ['#94A3B8', '#64748B'] : ['#334155', '#1E293B']} // Grey if disabled
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 0, y: 1 }}
+                                style={styles.actionBtnGradient}
+                            >
+                                <View style={[styles.iconCircleWhite, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
+                                    <MaterialCommunityIcons name="logout" size={24} color="#FFF" />
+                                </View>
+                                <View style={styles.btnTextContainer}>
+                                    <Text style={styles.btnTitleMain}>PULANG</Text>
+                                    <Text style={styles.btnSubWhite}>
+                                        {todayCheckIn ? 'Selesai Shift' : 'Belum Absen Masuk'}
+                                    </Text>
+                                </View>
+                            </LinearGradient>
                         </View>
                     </TouchableOpacity>
                 </View>
@@ -769,6 +833,31 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
 
+    // Event Banner
+    eventBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        backgroundColor: '#EC4899', // Pink event color
+        borderRadius: 12,
+        marginBottom: 16,
+        marginHorizontal: 4,
+        shadowColor: "#EC4899",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+        elevation: 4,
+    },
+    eventTitle: {
+        fontWeight: 'bold',
+        color: '#FFF',
+        fontSize: 14,
+    },
+    eventSub: {
+        fontSize: 12,
+        color: 'rgba(255,255,255,0.9)',
+    },
+
     // Notes Form
     formCard: {
         marginBottom: 20,
@@ -786,53 +875,59 @@ const styles = StyleSheet.create({
     },
 
     // Action Buttons
+    // Action Buttons
     actionContainer: {
         flexDirection: 'row',
-        gap: 12,
+        gap: 16,
     },
-    actionBtn: {
+    btnShadowContainer: {
         flex: 1,
-        borderRadius: 16,
-        padding: 16,
-        justifyContent: 'space-between',
-        height: 110,
+        borderRadius: 20,
+        backgroundColor: 'white',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 6,
+        height: 100,
     },
-    checkInBtn: {
+    btnOverflow: {
+        flex: 1,
+        borderRadius: 20,
+        overflow: 'hidden',
+    },
+    actionBtnGradient: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+    },
+    btnTextContainer: {
+        marginLeft: 12,
+        flex: 1,
+    },
+    iconCircleWhite: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         backgroundColor: 'white',
-        borderLeftWidth: 4,
-        borderLeftColor: '#DC2626',
-    },
-    checkOutBtn: {
-        backgroundColor: 'white',
-        borderLeftWidth: 4,
-        borderLeftColor: '#4B5563',
-    },
-    btnIconBg: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
-        backgroundColor: '#FEF2F2',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 12,
     },
-    btnTitle: {
+    btnTitleMain: {
         fontSize: 16,
-        fontWeight: 'bold',
-        color: '#DC2626',
+        fontWeight: '800',
+        color: 'white',
+        letterSpacing: 0.5,
         marginBottom: 2,
     },
-    btnSub: {
-        fontSize: 12,
-        color: '#6B7280',
+    btnSubWhite: {
+        fontSize: 11,
+        color: 'rgba(255,255,255,0.85)',
+        fontWeight: '600',
     },
     disabledBtn: {
-        opacity: 0.6,
+        opacity: 0.5,
     },
 
     // Modals

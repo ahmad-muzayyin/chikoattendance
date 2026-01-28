@@ -53,41 +53,111 @@ export default function LeaderboardScreen() {
         fetchLeaderboard();
     };
 
-    const RankItem = ({ item, rank, type }: { item: EmployeeStats, rank: number, type: 'best' | 'worst' }) => {
-        const isBest = type === 'best';
-        const medalColor = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : '#CD7F32';
+    // Podium Component for Top 3
+    const Podium = ({ employees }: { employees: EmployeeStats[] }) => {
+        const [first, second, third] = employees;
 
-        return (
-            <View style={styles.rankItem}>
-                <View style={styles.rankBadgeContainer}>
-                    {isBest && rank <= 3 ? (
-                        <MaterialCommunityIcons name="medal" size={24} color={medalColor} />
-                    ) : (
-                        <Text style={[styles.rankNumber, { color: isBest ? colors.success : colors.error }]}>#{rank}</Text>
+        const PodiumItem = ({ item, rank, isCenter = false }: { item: EmployeeStats, rank: number, isCenter?: boolean }) => (
+            <View style={[styles.podiumItem, isCenter && styles.podiumItemCenter]}>
+                <View style={[styles.avatarContainer, isCenter && styles.avatarContainerCenter]}>
+                    <Avatar.Image
+                        size={isCenter ? 80 : 60}
+                        source={item?.photo ? { uri: item.photo } : require('../../assets/logo.png')}
+                        style={[
+                            styles.podiumAvatar,
+                            { borderColor: rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : '#CD7F32' }
+                        ]}
+                    />
+                    <View style={[
+                        styles.rankBadge,
+                        isCenter && styles.rankBadgeCenter,
+                        { backgroundColor: rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : '#CD7F32' }
+                    ]}>
+                        <Text style={styles.rankBadgeText}>{rank}</Text>
+                    </View>
+                    {rank === 1 && (
+                        <MaterialCommunityIcons name="crown" size={24} color="#FFD700" style={styles.crownIcon} />
                     )}
                 </View>
+                <Text style={styles.podiumName} numberOfLines={1}>{item?.name || '-'}</Text>
+                <Text style={styles.podiumScore}>{item?.score || 0} Poin</Text>
+            </View>
+        );
 
+        return (
+            <View style={styles.podiumContainer}>
+                <View style={{ marginTop: 20 }}>
+                    {second && <PodiumItem item={second} rank={2} />}
+                </View>
+                <View style={{ zIndex: 1, marginHorizontal: -10 }}>
+                    {first && <PodiumItem item={first} rank={1} isCenter />}
+                </View>
+                <View style={{ marginTop: 20 }}>
+                    {third && <PodiumItem item={third} rank={3} />}
+                </View>
+            </View>
+        );
+    };
+
+    const RankItem = ({ item, rank, type }: { item: EmployeeStats, rank: number, type: 'best' | 'worst' }) => {
+        const isBest = type === 'best';
+
+        return (
+            <Surface style={styles.rankItem} elevation={1}>
+                {/* Header: Rank Left, Score Right */}
+                <View style={styles.rankHeader}>
+                    <View style={styles.rankIndex}>
+                        <Text style={[styles.rankNumber, { color: isBest ? colors.textSecondary : colors.error }]}>#{rank}</Text>
+                    </View>
+                    <View style={[styles.scoreBadge, !isBest && { backgroundColor: '#FEF2F2', minWidth: 'auto' }]}>
+                        <Text style={[styles.scoreValue, { fontSize: 12, color: isBest ? colors.primary : colors.error }]}>
+                            {isBest ? item.score : item.late}
+                        </Text>
+                    </View>
+                </View>
+
+                {/* Center Content */}
                 <Avatar.Image
-                    size={40}
+                    size={48}
                     source={item.photo ? { uri: item.photo } : require('../../assets/logo.png')}
-                    style={{ backgroundColor: '#f0f0f0', marginRight: 12 }}
+                    style={styles.listAvatar}
                 />
 
-                <View style={{ flex: 1 }}>
-                    <Text style={styles.rankName} numberOfLines={1}>{item.name}</Text>
-                    <Text style={styles.rankSub}>
+                <Text style={styles.rankName} numberOfLines={1}>{item.name}</Text>
+
+                {/* Footer Stats */}
+                <View style={styles.statsRow}>
+                    <Text style={styles.rankSub} numberOfLines={1}>
                         {isBest
-                            ? `${item.present} Hadir • ${item.late} Telat`
-                            : `${item.late}x Terlambat`
+                            ? `${item.present}H ${item.late}T`
+                            : `${item.late}x (${item.latePercentage}%)`
                         }
                     </Text>
                 </View>
+            </Surface>
+        );
+    };
 
-                <View style={styles.scoreContainer}>
-                    <Text style={[styles.scoreValue, { color: isBest ? colors.primary : colors.error }]}>
-                        {isBest ? item.score : item.late}
-                    </Text>
-                    <Text style={styles.scoreLabel}>{isBest ? 'Poin' : 'Telat'}</Text>
+
+    const RankItemCompact = ({ item, rank, type }: { item: EmployeeStats, rank: number, type: 'best' | 'worst' }) => {
+        const isBest = type === 'best';
+        return (
+            <View style={styles.rankItemCompact}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <View style={[styles.rankBadgeSmall, { backgroundColor: isBest ? '#F0F9FF' : '#FEF2F2' }]}>
+                        <Text style={[styles.rankTextSmall, { color: isBest ? colors.primary : colors.error }]}>#{rank}</Text>
+                    </View>
+                    <Avatar.Image
+                        size={32}
+                        source={item.photo ? { uri: item.photo } : require('../../assets/logo.png')}
+                        style={styles.avatarSmall}
+                    />
+                    <View style={{ flex: 1, marginLeft: 8 }}>
+                        <Text style={styles.nameSmall} numberOfLines={1}>{item.name}</Text>
+                        <Text style={styles.scoreSmall}>
+                            {isBest ? `${item.score} Poin` : `${item.late}x Telat`}
+                        </Text>
+                    </View>
                 </View>
             </View>
         );
@@ -111,42 +181,71 @@ export default function LeaderboardScreen() {
                 <ScrollView
                     contentContainerStyle={styles.scrollContent}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+                    showsVerticalScrollIndicator={false}
                 >
                     {data.map((outlet, index) => (
-                        <Surface key={index} style={styles.outletCard}>
+                        <View key={index} style={styles.outletSection}>
                             <View style={styles.outletHeader}>
-                                <MaterialCommunityIcons name="store" size={20} color={colors.primary} />
+                                <View style={styles.iconBox}>
+                                    <MaterialCommunityIcons name="store" size={22} color={colors.primary} />
+                                </View>
                                 <Text style={styles.outletName}>{outlet.branchName}</Text>
                             </View>
 
-                            {/* BEST SECTION */}
-                            <View style={styles.section}>
-                                <View style={styles.sectionHeader}>
-                                    <MaterialCommunityIcons name="star-circle" size={20} color="#EAB308" />
-                                    <Text style={styles.sectionTitle}>Karyawan Terrajin</Text>
-                                </View>
-                                {outlet.best.length > 0 ? (
-                                    outlet.best.map((emp, i) => (
-                                        <RankItem key={emp.id} item={emp} rank={i + 1} type="best" />
-                                    ))
-                                ) : (
-                                    <Text style={styles.emptyText}>Belum ada data.</Text>
-                                )}
-                            </View>
+                            {/* Split View Container */}
+                            <View style={styles.splitContainer}>
+                                {/* LEFT COLUMN: Top Performer */}
+                                <View style={styles.leftColumn}>
+                                    <Surface style={styles.columnSurface} elevation={2}>
+                                        <View style={styles.sectionHeader}>
+                                            <MaterialCommunityIcons name="trophy" size={16} color="#EAB308" />
+                                            <Text style={styles.sectionTitle}>Top</Text>
+                                        </View>
 
-                            {/* WORST SECTION */}
-                            {outlet.worst.length > 0 && (
-                                <View style={[styles.section, { marginTop: 16 }]}>
-                                    <View style={styles.sectionHeader}>
-                                        <MaterialCommunityIcons name="alert-circle" size={20} color={colors.error} />
-                                        <Text style={[styles.sectionTitle, { color: colors.error }]}>Perlu Pembinaan</Text>
-                                    </View>
-                                    {outlet.worst.map((emp, i) => (
-                                        <RankItem key={emp.id} item={emp} rank={i + 1} type="worst" />
-                                    ))}
+                                        {outlet.best.length > 0 ? (
+                                            <>
+                                                {/* Mini Podium for Top 3 */}
+                                                <Podium employees={outlet.best.slice(0, 3)} />
+
+                                                {/* List for 4+ */}
+                                                {outlet.best.length > 3 && (
+                                                    <View style={styles.verticalList}>
+                                                        {outlet.best.slice(3).map((emp, i) => (
+                                                            <RankItemCompact key={emp.id} item={emp} rank={i + 4} type="best" />
+                                                        ))}
+                                                    </View>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <Text style={styles.emptyTextMini}>Belum ada data.</Text>
+                                        )}
+                                    </Surface>
                                 </View>
-                            )}
-                        </Surface>
+
+                                {/* RIGHT COLUMN: Needs Coaching */}
+                                <View style={styles.rightColumn}>
+                                    <Surface style={[styles.columnSurface, styles.alertCard]} elevation={1}>
+                                        <View style={styles.sectionHeader}>
+                                            <MaterialCommunityIcons name="alert-rhombus" size={16} color={colors.error} />
+                                            <Text style={[styles.sectionTitle, { color: colors.error }]}>Pembinaan</Text>
+                                        </View>
+
+                                        {outlet.worst.length > 0 ? (
+                                            <View style={styles.verticalList}>
+                                                {outlet.worst.map((emp, i) => (
+                                                    <RankItemCompact key={emp.id} item={emp} rank={i + 1} type="worst" />
+                                                ))}
+                                            </View>
+                                        ) : (
+                                            <View style={styles.emptyStateMini}>
+                                                <MaterialCommunityIcons name="check-circle-outline" size={24} color={colors.success} />
+                                                <Text style={styles.emptyTextMaxi}>Semua Rajin!</Text>
+                                            </View>
+                                        )}
+                                    </Surface>
+                                </View>
+                            </View>
+                        </View>
                     ))}
 
                     {data.length === 0 && (
@@ -159,25 +258,318 @@ export default function LeaderboardScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F8FAFC' },
+    container: { flex: 1, backgroundColor: '#F8FAFC' }, // Slate 50
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    header: { padding: 24, paddingTop: 60, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-    headerTitle: { fontSize: 24, fontWeight: 'bold', color: 'white' },
-    headerSubtitle: { color: 'rgba(255,255,255,0.9)', marginTop: 4 },
-    scrollContent: { padding: 20 },
-    outletCard: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 20, ...shadows.sm },
-    outletHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', paddingBottom: 12 },
-    outletName: { fontSize: 18, fontWeight: 'bold', color: '#1F2937', marginLeft: 8 },
-    section: {},
-    sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 },
-    sectionTitle: { fontSize: 14, fontWeight: '700', color: '#1F2937', letterSpacing: 0.5 },
-    emptyText: { textAlign: 'center', color: '#9CA3AF', fontSize: 12, fontStyle: 'italic', marginVertical: 8 },
-    rankItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, backgroundColor: '#F9FAFB', padding: 8, borderRadius: 12 },
-    rankBadgeContainer: { width: 32, alignItems: 'center', marginRight: 4 },
-    rankNumber: { fontWeight: 'bold', fontSize: 16 },
-    rankName: { fontSize: 14, fontWeight: '600', color: '#1F2937' },
-    rankSub: { fontSize: 11, color: '#6B7280' },
-    scoreContainer: { alignItems: 'flex-end', marginLeft: 8 },
-    scoreValue: { fontSize: 16, fontWeight: 'bold' },
-    scoreLabel: { fontSize: 10, color: '#9CA3AF' }
+    header: {
+        padding: 24,
+        paddingTop: 60,
+        paddingBottom: 40,
+        borderBottomLeftRadius: 32,
+        borderBottomRightRadius: 32,
+        marginBottom: 10,
+    },
+    headerTitle: {
+        fontSize: 28,
+        fontWeight: '800',
+        color: 'white',
+        letterSpacing: 0.5,
+    },
+    headerSubtitle: {
+        color: 'rgba(255,255,255,0.9)',
+        marginTop: 6,
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    scrollContent: {
+        padding: 20,
+        paddingBottom: 40,
+    },
+    outletSection: {
+        marginBottom: 24,
+    },
+    outletHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+        paddingHorizontal: 4,
+    },
+    iconBox: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        backgroundColor: '#DBEAFE', // Blue 100
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 10,
+    },
+    outletName: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#1E293B', // Slate 800
+    },
+    cardSurface: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        padding: 20,
+        shadowColor: "#64748B",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 3,
+        marginBottom: 16,
+    },
+    alertCard: {
+        backgroundColor: '#FEF2F2', // Red 50
+        borderWidth: 1,
+        borderColor: '#FECACA', // Red 200
+        padding: 16,
+        shadowOpacity: 0,
+        elevation: 0,
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 20,
+        gap: 8,
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#334155',
+        letterSpacing: 0.3
+    },
+
+    // Podium Styles
+    podiumContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'flex-end',
+        marginBottom: 16,
+    },
+    podiumItem: {
+        alignItems: 'center',
+        width: 45, // Scaled down for split view (was 90)
+    },
+    podiumItemCenter: {
+        width: 55, // Scaled down (was 110)
+    },
+    avatarContainer: {
+        marginBottom: 12,
+        alignItems: 'center',
+        position: 'relative',
+    },
+    avatarContainerCenter: {
+        marginBottom: 16,
+    },
+    podiumAvatar: {
+        backgroundColor: '#FFF',
+        borderWidth: 3,
+    },
+    crownIcon: {
+        position: 'absolute',
+        top: -24,
+        zIndex: 10,
+    },
+    rankBadge: {
+        position: 'absolute',
+        bottom: -8,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: '#FFF',
+    },
+    rankBadgeCenter: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        bottom: -10,
+    },
+    rankBadgeText: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#FFF',
+    },
+    podiumName: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#334155',
+        textAlign: 'center',
+        marginBottom: 4,
+    },
+    podiumScore: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: colors.primary,
+    },
+
+    // List Item Styles
+    restList: {
+        marginTop: 8,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        rowGap: 12,
+    },
+    alertList: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        rowGap: 12,
+    },
+    rankItem: {
+        width: '48%', // 2 Columns
+        backgroundColor: '#FFFFFF',
+        padding: 12,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+        alignItems: 'center',
+    },
+    rankHeader: {
+        width: '100%',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    rankIndex: {
+        // width: 32, // Removed fixed width
+    },
+    rankNumber: {
+        fontWeight: '700',
+        fontSize: 12,
+        color: '#64748B',
+    },
+    listAvatar: {
+        backgroundColor: '#F8FAFC',
+        marginBottom: 8,
+    },
+    rankName: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#1E293B',
+        marginBottom: 2,
+        textAlign: 'center',
+    },
+    statsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+    },
+    rankSub: {
+        fontSize: 11,
+        color: '#64748B',
+        fontWeight: '500',
+        textAlign: 'center',
+    },
+    scoreContainer: {
+        // Removed
+    },
+    scoreBadge: {
+        backgroundColor: '#F0F9FF',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 8,
+        alignItems: 'center',
+        minWidth: 40,
+    },
+    scoreValue: {
+        fontSize: 12,
+        fontWeight: '800'
+    },
+    scoreLabel: {
+        fontSize: 9,
+        color: '#64748B',
+        textTransform: 'uppercase',
+        marginTop: 2,
+        fontWeight: '600',
+    },
+    emptyState: {
+        alignItems: 'center',
+        padding: 30,
+        gap: 8,
+    },
+    emptyText: {
+        color: '#94A3B8',
+        fontSize: 13,
+    },
+    // SPLIT VIEW STYLES
+    splitContainer: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    leftColumn: {
+        flex: 1,
+        marginRight: 6,
+    },
+    rightColumn: {
+        flex: 1,
+        marginLeft: 6,
+    },
+    columnSurface: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 12,
+        minHeight: 200,
+    },
+    verticalList: {
+        gap: 10,
+        marginTop: 8,
+    },
+    // Compact Rank Item
+    rankItemCompact: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        padding: 8,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+    },
+    rankBadgeSmall: {
+        width: 20,
+        height: 20,
+        borderRadius: 6,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 8,
+    },
+    rankTextSmall: {
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    avatarSmall: {
+        backgroundColor: '#F1F5F9',
+    },
+    nameSmall: {
+        fontSize: 11, // Smaller text
+        fontWeight: '700',
+        color: '#1E293B',
+        marginBottom: 1,
+    },
+    scoreSmall: {
+        fontSize: 10,
+        color: '#64748B',
+    },
+    emptyStateMini: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: 100,
+        opacity: 0.5,
+    },
+    emptyTextMini: {
+        textAlign: 'center',
+        color: '#94A3B8',
+        fontSize: 12,
+        marginTop: 20,
+    },
+    emptyTextMaxi: {
+        color: colors.success,
+        fontSize: 12,
+        fontWeight: 'bold',
+        marginTop: 4,
+    },
 });

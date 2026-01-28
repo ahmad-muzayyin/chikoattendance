@@ -19,9 +19,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
-import { API_CONFIG } from '../config/api';
+import { API_CONFIG, ENDPOINTS } from '../config/api';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import { NotificationService } from '../services/NotificationService';
 
 const { width } = Dimensions.get('window');
 
@@ -47,56 +48,37 @@ export default function HomeScreen() {
     // ... (existing imports)
 
     useEffect(() => {
-        fetchStats();
+        const syncData = async () => {
+            await fetchStats();
+
+            // Check Today's Attendance for Notification Sync
+            try {
+                const token = await SecureStore.getItemAsync('authToken');
+                const { data } = await axios.get(
+                    `${API_CONFIG.BASE_URL}${ENDPOINTS.CALENDAR}?deviceId=MOBILE_APP`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                const todayStr = new Date().toLocaleDateString('en-CA');
+                const todayRecord = data.find((r: any) => r.date === todayStr);
+
+                const hasCheckedIn = !!todayRecord?.checkInTime;
+                const hasCheckedOut = !!todayRecord?.checkOutTime;
+
+                // Sync Notifications
+                NotificationService.updatePushToken();
+                const start = (user as any)?.shift?.startTime || "08:00";
+                const end = (user as any)?.shift?.endTime || "17:00";
+
+                NotificationService.scheduleAttendanceReminder(start, end, hasCheckedIn, hasCheckedOut);
+            } catch (e) {
+                console.log('Sync notification error', e);
+            }
+        };
+
+        syncData();
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-
-        // Push Notification Setup
-        registerForPushNotificationsAsync().then(token => {
-            if (token) {
-                // Send to backend
-                SecureStore.getItemAsync('authToken').then(tokenAuth => {
-                    if (tokenAuth) {
-                        axios.post(`${API_CONFIG.BASE_URL}/auth/push-token`, { pushToken: token }, {
-                            headers: { Authorization: `Bearer ${tokenAuth}` }
-                        }).catch(err => console.log('Push token update error', err));
-                    }
-                });
-            }
-        });
-
         return () => clearInterval(timer);
-    }, []);
-
-    async function registerForPushNotificationsAsync() {
-        let token;
-        if (Device.isDevice) {
-            const { status: existingStatus } = await Notifications.getPermissionsAsync();
-            let finalStatus = existingStatus;
-            if (existingStatus !== 'granted') {
-                const { status } = await Notifications.requestPermissionsAsync();
-                finalStatus = status;
-            }
-            if (finalStatus !== 'granted') {
-                // alert('Failed to get push token for push notification!');
-                return;
-            }
-            // Get the token (use project ID if configured, otherwise default)
-            token = (await Notifications.getExpoPushTokenAsync()).data;
-        } else {
-            console.log('Must use physical device for Push Notifications');
-        }
-
-        if (Platform.OS === 'android') {
-            await Notifications.setNotificationChannelAsync('default', {
-                name: 'default',
-                importance: Notifications.AndroidImportance.MAX,
-                vibrationPattern: [0, 250, 250, 250],
-                lightColor: '#FF231F7C',
-            });
-        }
-
-        return token;
-    }
+    }, [user]);
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -125,20 +107,15 @@ export default function HomeScreen() {
         <TouchableOpacity
             style={[styles.actionCard, isLarge && styles.actionCardLarge]}
             onPress={onPress}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
         >
-            <View style={[styles.actionIcon, { backgroundColor: `${color}15` }]}>
-                <MaterialCommunityIcons name={icon} size={isLarge ? 32 : 24} color={color} />
+            <View style={[styles.actionIcon, { backgroundColor: `${color}10` }]}>
+                <MaterialCommunityIcons name={icon} size={28} color={color} />
             </View>
             <View style={styles.actionText}>
                 <Text style={styles.actionTitle}>{title}</Text>
                 <Text style={styles.actionSubtitle} numberOfLines={2}>{subtitle}</Text>
             </View>
-            {isLarge && (
-                <View style={styles.actionArrow}>
-                    <MaterialCommunityIcons name="arrow-right" size={20} color={colors.textMuted} />
-                </View>
-            )}
         </TouchableOpacity>
     );
 
@@ -300,10 +277,10 @@ export default function HomeScreen() {
 
                     <View style={styles.row}>
                         <QuickAction
-                            icon={user?.role === 'OWNER' ? "medal" : "star-face"}
-                            title={user?.role === 'OWNER' ? "Poin Karyawan" : "Poin Saya"}
-                            subtitle={user?.role === 'OWNER' ? "Total Poin Tim" : "Prestasi & Sanksi"}
-                            color={colors.warning}
+                            icon={user?.role === 'OWNER' ? "trophy-award" : "star-face"}
+                            title={user?.role === 'OWNER' ? "Leaderboard" : "Poin Saya"}
+                            subtitle={user?.role === 'OWNER' ? "Top Karyawan" : "Prestasi & Sanksi"}
+                            color={user?.role === 'OWNER' ? "#EAB308" : colors.warning}
                             onPress={() => {
                                 if (user?.role === 'OWNER') {
                                     navigation.navigate('Leaderboard');
@@ -341,19 +318,33 @@ export default function HomeScreen() {
                         </View>
                     )}
 
-                    {/* Leaderboard - Visible to All (Motivation) */}
-                    <View style={[styles.row, { marginTop: user?.role === 'OWNER' ? spacing.md : 0 }]}>
-                        <QuickAction
-                            icon="trophy-award"
-                            title="Leaderboard"
-                            subtitle="Top Karyawan"
-                            color="#EAB308" // Gold
-                            onPress={() => navigation.navigate('Leaderboard')}
-                        />
-                        {/* Placeholder for balance/alignment */}
-                        <View style={{ flex: 1 }} />
-                    </View>
+                    {/* Leaderboard - Visible to Employee (Owner has it in top grid) */}
+                    {user?.role !== 'OWNER' && (
+                        <View style={styles.row}>
+                            <QuickAction
+                                icon="trophy-award"
+                                title="Leaderboard"
+                                subtitle="Top Karyawan"
+                                color="#EAB308"
+                                onPress={() => navigation.navigate('Leaderboard')}
+                            />
+
+                            {/* Check for Head of Store/Manager for Event Management */}
+                            {(user?.role === 'HEAD' || user?.role === 'OWNER') ? (
+                                <QuickAction
+                                    icon="calendar-star"
+                                    title="Kelola Event"
+                                    subtitle="Jadwal Khusus"
+                                    color="#EC4899"
+                                    onPress={() => navigation.navigate('EventManagement')}
+                                />
+                            ) : (
+                                <View style={{ flex: 1 }} />
+                            )}
+                        </View>
+                    )}
                 </View>
+
 
                 {/* Quote / Info Card */}
                 <Surface style={styles.infoCard} elevation={1}>
@@ -363,7 +354,7 @@ export default function HomeScreen() {
                     </Text>
                 </Surface>
 
-            </ScrollView>
+            </ScrollView >
         </View >
     );
 }
@@ -445,68 +436,67 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: 'rgba(255, 255, 255, 0.9)', // Slightly transparent white for glass feel
-        borderRadius: borderRadius.lg, // Reduced from xl
-        padding: spacing.sm, // Reduced from md
-        paddingHorizontal: spacing.md, // Reduced from lg
-        zIndex: 2,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        padding: 16,
+        marginHorizontal: 8,
         // Elevation/Shadow
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 5,
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
         elevation: 6,
     },
     clockTime: {
-        fontSize: 22, // Reduced from 26
-        fontWeight: '800',
-        color: colors.primary, // Red time
+        fontSize: 22,
+        fontWeight: '700',
+        color: colors.primary,
         fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-        letterSpacing: -1,
     },
     clockDate: {
-        fontSize: 11, // Reduced from 13
+        fontSize: 12,
         color: colors.textSecondary,
-        fontWeight: '600',
+        fontWeight: '500',
+        marginTop: 2,
     },
     clockIconBadge: {
-        width: 36, // Reduced from 44
-        height: 36, // Reduced from 44
+        width: 36,
+        height: 36,
         borderRadius: 18,
-        backgroundColor: '#FEE2E2', // Light red bg
+        backgroundColor: '#FEE2E2',
         alignItems: 'center',
         justifyContent: 'center',
     },
     content: {
         flex: 1,
-        marginTop: -20, // Overlap effect
+        marginTop: -20,
     },
     scrollContent: {
         paddingHorizontal: spacing.lg,
         paddingBottom: 40,
-        paddingTop: 10, // Added padding top for content safety
+        paddingTop: 10,
     },
     statsContainer: {
         flexDirection: 'row',
         backgroundColor: '#FFF',
-        borderRadius: 16, // Reduced from 20
-        padding: spacing.md, // Reduced from lg
+        borderRadius: 16,
+        padding: spacing.md,
         justifyContent: 'space-between',
         alignItems: 'center',
         ...shadows.sm,
-        marginBottom: spacing.sm, // Merely 8px now
+        marginBottom: spacing.sm,
     },
     statItem: {
         alignItems: 'center',
         flex: 1,
     },
     statValue: {
-        fontSize: 16, // Reduced from 20
+        fontSize: 16,
         fontWeight: 'bold',
         marginBottom: 4,
     },
     statLabel: {
-        fontSize: 10, // Reduced from 12
+        fontSize: 10,
         color: colors.textSecondary,
     },
     statDivider: {
@@ -515,28 +505,34 @@ const styles = StyleSheet.create({
         backgroundColor: colors.divider,
     },
     sectionTitle: {
-        fontSize: 16, // Reduced from 18
+        fontSize: 15,
         fontWeight: '700',
         color: colors.textPrimary,
-        marginBottom: spacing.xs, // Minimal 4px
+        marginBottom: 10,
         marginLeft: 4,
+        marginTop: 4,
     },
     gridContainer: {
-        gap: spacing.xs, // Reduced to 4px
+        gap: 12,
+        paddingBottom: 20,
     },
     row: {
         flexDirection: 'row',
-        gap: spacing.xs, // Reduced to 4px
-        marginBottom: spacing.xs, // Reduced to 4px
+        gap: 12,
+        marginBottom: 0,
     },
     mainAction: {
-        marginBottom: spacing.xs, // Reduced to 4px
+        marginBottom: 4,
         borderRadius: 20,
         overflow: 'hidden',
-        ...shadows.md,
+        elevation: 3,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 6,
     },
     mainActionGradient: {
-        padding: spacing.lg,
+        padding: 16,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -546,17 +542,17 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     mainActionIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         backgroundColor: 'rgba(255,255,255,0.2)',
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: spacing.md,
+        marginRight: 12,
     },
     mainActionTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
+        fontSize: 16,
+        fontWeight: '700',
         color: '#FFF',
     },
     mainActionSubtitle: {
@@ -565,43 +561,56 @@ const styles = StyleSheet.create({
     },
     actionCard: {
         flex: 1,
-        flexDirection: 'row', // Icon and text side by side
         alignItems: 'center',
-        backgroundColor: '#FFF',
-        borderRadius: 12, // More compact
-        padding: spacing.sm,
-        minHeight: 65, // Much shorter than 90
-        ...shadows.sm,
+        justifyContent: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        paddingVertical: 20,
+        paddingHorizontal: 8,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+        minHeight: 120, // Taller for vertical stack
+        shadowColor: "#64748B",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        elevation: 2,
     },
     actionCardLarge: {
+        width: '100%',
         flexDirection: 'row',
+        justifyContent: 'flex-start',
+        paddingHorizontal: 16,
+        minHeight: 80,
+    },
+    actionIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 10,
+    },
+    actionText: {
         alignItems: 'center',
         width: '100%',
     },
-    actionIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 8, // Added gap to text
-    },
-    actionText: {
-        flex: 1,
-    },
     actionTitle: {
-        fontSize: 13, // Reduced from 15
-        fontWeight: '600',
-        color: colors.textPrimary,
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#1E293B',
         marginBottom: 2,
+        textAlign: 'center',
     },
     actionSubtitle: {
         fontSize: 10,
-        color: colors.textSecondary,
-        lineHeight: 12, // Tighter leading
+        color: '#64748B',
+        fontWeight: '500',
+        textAlign: 'center',
+        lineHeight: 12,
     },
     actionArrow: {
-        marginLeft: spacing.sm,
+        display: 'none',
     },
     infoCard: {
         flexDirection: 'row',

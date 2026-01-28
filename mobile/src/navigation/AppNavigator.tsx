@@ -1,4 +1,3 @@
-// d:\AHMAD MUZAYYIN\ChikoAttendance\mobile\src\navigation\AppNavigator.tsx
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -34,6 +33,7 @@ import OwnerRecapBranchScreen from '../screens/OwnerRecapBranchScreen';
 import OwnerRecapEmployeesScreen from '../screens/OwnerRecapEmployeesScreen';
 import OwnerRecapDetailScreen from '../screens/OwnerRecapDetailScreen';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
+import EventManagementScreen from '../screens/EventManagementScreen';
 
 export type RootStackParamList = {
     Loading: undefined;
@@ -57,6 +57,7 @@ export type RootStackParamList = {
     OwnerRecapDetail: { userId: any; userName: string };
     Leaderboard: undefined;
     PositionList: undefined;
+    EventManagement: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -86,7 +87,6 @@ function MainTabNavigator() {
                     paddingTop: 8,
                     backgroundColor: colors.surface,
                 },
-                // ... rest remains same
                 tabBarLabelStyle: {
                     fontSize: 11,
                     fontWeight: '500',
@@ -191,6 +191,9 @@ export default function AppNavigator() {
                         <Stack.Screen name="OwnerRecapBranch" component={OwnerRecapBranchScreen} options={{ headerShown: true, title: 'Pilih Outlet' }} />
                         <Stack.Screen name="OwnerRecapEmployees" component={OwnerRecapEmployeesScreen} options={{ headerShown: true, title: 'Pilih Karyawan' }} />
                         <Stack.Screen name="OwnerRecapDetail" component={OwnerRecapDetailScreen} options={{ headerShown: true, title: 'Detail Rekap' }} />
+
+                        {/* Event Management */}
+                        <Stack.Screen name="EventManagement" component={EventManagementScreen} options={{ headerShown: false }} />
 
                         {/* Shared Screens */}
                         <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, title: 'Pengaturan Akun' }} />

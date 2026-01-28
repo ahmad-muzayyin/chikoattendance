@@ -61,39 +61,21 @@ export default function OwnerRecapDetailScreen() {
     }, [month, year]);
 
     // Grouping logic remains similar but I'll optimize
-    const groupedData: any = {};
-    attendances.forEach(att => {
-        const dateKey = new Date(att.timestamp).toLocaleDateString('id-ID');
-        if (!groupedData[dateKey]) groupedData[dateKey] = { date: att.timestamp };
+    const items = attendances.map((item: any) => {
+        const alphaEvent = item.events?.find((e: any) => e.type === 'ALPHA');
+        const permitEvent = item.events?.find((e: any) => e.type === 'PERMIT');
+        const sickEvent = item.events?.find((e: any) => e.type === 'SICK');
 
-        if (att.type === 'CHECK_IN') {
-            groupedData[dateKey].checkIn = att.timestamp;
-            groupedData[dateKey].checkInFormatted = att.timestampFormatted;
-            groupedData[dateKey].isLate = att.isLate;
-            groupedData[dateKey].checkInPhoto = att.photoUrl;
-            groupedData[dateKey].checkInLocation = { lat: att.latitude, lng: att.longitude };
-            groupedData[dateKey].checkInNotes = att.notes;
-        } else if (att.type === 'CHECK_OUT') {
-            if (!groupedData[dateKey].checkOut) {
-                groupedData[dateKey].checkOut = att.timestamp;
-                groupedData[dateKey].checkOutFormatted = att.timestampFormatted;
-                groupedData[dateKey].checkOutPhoto = att.photoUrl;
-                groupedData[dateKey].checkOutLocation = { lat: att.latitude, lng: att.longitude };
-                groupedData[dateKey].checkOutNotes = att.notes;
-            }
-        } else if (att.type === 'ALPHA') {
-            groupedData[dateKey].isAlpha = true;
-            groupedData[dateKey].alphaNotes = att.notes;
-        } else if (att.type === 'PERMIT') {
-            groupedData[dateKey].isPermit = true;
-            groupedData[dateKey].permitNotes = att.notes;
-        } else if (att.type === 'SICK') {
-            groupedData[dateKey].isSick = true;
-            groupedData[dateKey].sickNotes = att.notes;
-        }
-    });
-
-    const items = Object.values(groupedData).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return {
+            ...item,
+            isAlpha: !!alphaEvent,
+            alphaNotes: alphaEvent?.notes,
+            isPermit: !!permitEvent,
+            permitNotes: permitEvent?.notes,
+            isSick: !!sickEvent,
+            sickNotes: sickEvent?.notes,
+        };
+    }).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     return (
         <View style={styles.container}>
@@ -765,11 +747,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 6,
         paddingVertical: 2,
         borderRadius: 6,
-    },
-    alphaBadgeOwnerText: {
-        fontSize: 9,
-        fontWeight: 'bold',
-        color: colors.error,
     },
     alphaBadgeOwnerText: {
         fontSize: 9,

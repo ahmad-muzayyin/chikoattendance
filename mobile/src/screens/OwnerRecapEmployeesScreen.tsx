@@ -66,26 +66,18 @@ export default function OwnerRecapEmployeesScreen() {
                         const attendances = attendanceRes.data || [];
 
                         // Calculate stats
+                        // Calculate stats
                         let hadir = 0;
                         let telat = 0;
                         let izin = 0;
                         let alpha = 0;
 
-                        // Group by date to count unique days
-                        const dateMap: any = {};
-                        attendances.forEach((att: any) => {
-                            const date = new Date(att.timestamp).toDateString();
-                            if (!dateMap[date]) dateMap[date] = [];
-                            dateMap[date].push(att);
-                        });
-
-                        // Analyze each day
-                        Object.values(dateMap).forEach((dayAttendances: any) => {
-                            const hasCheckIn = dayAttendances.some((a: any) => a.type === 'CHECK_IN');
-                            const hasAlpha = dayAttendances.some((a: any) => a.type === 'ALPHA');
-                            const hasPermit = dayAttendances.some((a: any) => a.type === 'PERMIT');
-                            const hasSick = dayAttendances.some((a: any) => a.type === 'SICK');
-                            const isLate = dayAttendances.some((a: any) => a.isLate === true);
+                        attendances.forEach((day: any) => {
+                            const hasAlpha = day.events?.some((e: any) => e.type === 'ALPHA');
+                            const hasPermit = day.events?.some((e: any) => e.type === 'PERMIT');
+                            const hasSick = day.events?.some((e: any) => e.type === 'SICK');
+                            const hasCheckIn = !!day.checkIn;
+                            const isLate = day.isLate;
 
                             if (hasAlpha) {
                                 alpha++;
@@ -140,58 +132,75 @@ export default function OwnerRecapEmployeesScreen() {
             activeOpacity={0.7}
             onPress={() => navigation.navigate('OwnerRecapDetail', { userId: item.id, userName: item.name })}
         >
-            <Surface style={styles.card} elevation={2}>
-                <View style={styles.avatarContainer}>
-                    {item.profile_picture ? (
-                        <Avatar.Image
-                            size={50}
-                            source={{ uri: item.profile_picture }}
-                            style={{ backgroundColor: 'transparent' }}
-                        />
-                    ) : (
-                        <Avatar.Text
-                            size={50}
-                            label={item.name.substring(0, 2).toUpperCase()}
-                            style={{ backgroundColor: colors.primary }}
-                            color="#FFF"
-                        />
-                    )}
-                    {/* Role Badge */}
-                    <View style={styles.badgeContainer}>
-                        <MaterialCommunityIcons
-                            name={item.role === 'OWNER' ? 'crown' : 'account'}
-                            size={10}
-                            color="#FFF"
-                        />
-                    </View>
-                </View>
-
-                <View style={styles.infoContainer}>
-                    <Text style={styles.name}>{item.name}</Text>
-                    <View style={styles.row}>
-                        <View style={styles.roleTag}>
-                            <Text style={styles.roleText}>{item.role}</Text>
-                        </View>
-                        {/* Stats Summary Badges */}
-                        <View style={styles.statsRow}>
-                            <View style={[styles.statBadge, { backgroundColor: '#E8F5E9' }]}>
-                                <Text style={[styles.statLabel, { color: colors.success }]}>H: {item.stats?.hadir || 0}</Text>
-                            </View>
-                            <View style={[styles.statBadge, { backgroundColor: '#FFF3E0' }]}>
-                                <Text style={[styles.statLabel, { color: colors.warning }]}>T: {item.stats?.telat || 0}</Text>
-                            </View>
-                            <View style={[styles.statBadge, { backgroundColor: '#E3F2FD' }]}>
-                                <Text style={[styles.statLabel, { color: '#2196F3' }]}>I: {item.stats?.izin || 0}</Text>
-                            </View>
-                            <View style={[styles.statBadge, { backgroundColor: '#FFEBEE' }]}>
-                                <Text style={[styles.statLabel, { color: colors.error }]}>A: {item.stats?.alpha || 0}</Text>
-                            </View>
+            <Surface style={styles.card} elevation={3}>
+                {/* Header Section: Identity */}
+                <View style={styles.cardHeader}>
+                    <View style={styles.avatarContainer}>
+                        {item.profile_picture ? (
+                            <Avatar.Image
+                                size={46}
+                                source={{ uri: item.profile_picture }}
+                                style={{ backgroundColor: 'transparent' }}
+                            />
+                        ) : (
+                            <Avatar.Text
+                                size={46}
+                                label={item.name.substring(0, 2).toUpperCase()}
+                                style={{ backgroundColor: colors.primary }}
+                                color="#FFF"
+                            />
+                        )}
+                        <View style={styles.badgeContainer}>
+                            <MaterialCommunityIcons
+                                name={item.role === 'OWNER' ? 'crown' : 'account'}
+                                size={10}
+                                color="#FFF"
+                            />
                         </View>
                     </View>
-                </View>
-
-                <View style={styles.arrowContainer}>
+                    <View style={styles.headerTextContainer}>
+                        <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+                        <Text style={styles.roleText}>{item.role}</Text>
+                    </View>
                     <MaterialCommunityIcons name="chevron-right" size={24} color={colors.textMuted} />
+                </View>
+
+                {/* Divider Line */}
+                <View style={styles.cardDivider} />
+
+                {/* Data Section: Stats Grid */}
+                <View style={styles.statsGrid}>
+                    <View style={styles.statItem}>
+                        <View style={[styles.statIconContainer, { backgroundColor: '#F0FDF4' }]}>
+                            <MaterialCommunityIcons name="check-bold" size={16} color={colors.success} />
+                        </View>
+                        <Text style={[styles.statCount, { color: colors.success }]}>{item.stats?.hadir || 0}</Text>
+                        <Text style={styles.statLabel}>Hadir</Text>
+                    </View>
+
+                    <View style={styles.statItem}>
+                        <View style={[styles.statIconContainer, { backgroundColor: '#FFFBEB' }]}>
+                            <MaterialCommunityIcons name="clock-outline" size={16} color={colors.warning} />
+                        </View>
+                        <Text style={[styles.statCount, { color: colors.warning }]}>{item.stats?.telat || 0}</Text>
+                        <Text style={styles.statLabel}>Telat</Text>
+                    </View>
+
+                    <View style={styles.statItem}>
+                        <View style={[styles.statIconContainer, { backgroundColor: '#EFF6FF' }]}>
+                            <MaterialCommunityIcons name="file-document-outline" size={16} color={'#2196F3'} />
+                        </View>
+                        <Text style={[styles.statCount, { color: '#2196F3' }]}>{item.stats?.izin || 0}</Text>
+                        <Text style={styles.statLabel}>Izin/Sakit</Text>
+                    </View>
+
+                    <View style={styles.statItem}>
+                        <View style={[styles.statIconContainer, { backgroundColor: '#FEF2F2' }]}>
+                            <MaterialCommunityIcons name="close-thick" size={16} color={colors.error} />
+                        </View>
+                        <Text style={[styles.statCount, { color: colors.error }]}>{item.stats?.alpha || 0}</Text>
+                        <Text style={styles.statLabel}>Alpha</Text>
+                    </View>
                 </View>
             </Surface>
         </TouchableOpacity>
@@ -223,67 +232,17 @@ export default function OwnerRecapEmployeesScreen() {
             {/* Search Bar */}
             <View style={styles.searchContainer}>
                 <Searchbar
-                    placeholder="Cari Karyawan..."
+                    placeholder="Search employee..."
+                    placeholderTextColor={colors.textMuted}
                     onChangeText={setSearchQuery}
                     value={searchQuery}
                     style={styles.searchBar}
-                    inputStyle={{ fontSize: 14 }}
+                    inputStyle={styles.searchInput}
                     iconColor={colors.primary}
+                    rippleColor="rgba(0, 0, 0, 0.1)"
+                    elevation={0}
                 />
             </View>
-
-            {/* Filter Chips */}
-            {/* <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.filterChipsContainer}
-            >
-                <Chip
-                    selected={selectedFilter === 'ALL'}
-                    onPress={() => setSelectedFilter('ALL')}
-                    style={[styles.filterChip, selectedFilter === 'ALL' && styles.filterChipActive]}
-                    textStyle={[styles.filterChipText, selectedFilter === 'ALL' && styles.filterChipTextActive]}
-                    icon="filter-variant"
-                >
-                    Semua
-                </Chip>
-                <Chip
-                    selected={selectedFilter === 'HADIR'}
-                    onPress={() => setSelectedFilter('HADIR')}
-                    style={[styles.filterChip, selectedFilter === 'HADIR' && { backgroundColor: colors.success }]}
-                    textStyle={[styles.filterChipText, selectedFilter === 'HADIR' && { color: '#FFF' }]}
-                    icon="check-circle"
-                >
-                    Hadir
-                </Chip>
-                <Chip
-                    selected={selectedFilter === 'TELAT'}
-                    onPress={() => setSelectedFilter('TELAT')}
-                    style={[styles.filterChip, selectedFilter === 'TELAT' && { backgroundColor: colors.warning }]}
-                    textStyle={[styles.filterChipText, selectedFilter === 'TELAT' && { color: '#FFF' }]}
-                    icon="clock-alert"
-                >
-                    Terlambat
-                </Chip>
-                <Chip
-                    selected={selectedFilter === 'IZIN'}
-                    onPress={() => setSelectedFilter('IZIN')}
-                    style={[styles.filterChip, selectedFilter === 'IZIN' && { backgroundColor: '#2196F3' }]}
-                    textStyle={[styles.filterChipText, selectedFilter === 'IZIN' && { color: '#FFF' }]}
-                    icon="file-document"
-                >
-                    Izin
-                </Chip>
-                <Chip
-                    selected={selectedFilter === 'ALPHA'}
-                    onPress={() => setSelectedFilter('ALPHA')}
-                    style={[styles.filterChip, selectedFilter === 'ALPHA' && { backgroundColor: colors.error }]}
-                    textStyle={[styles.filterChipText, selectedFilter === 'ALPHA' && { color: '#FFF' }]}
-                    icon="close-circle"
-                >
-                    Alpha
-                </Chip>
-            </ScrollView> */}
 
             <FlatList
                 data={filteredList}
@@ -370,44 +329,63 @@ const styles = StyleSheet.create({
         ...shadows.sm,
     },
     searchBar: {
-        elevation: 0,
-        backgroundColor: colors.background,
-        borderRadius: borderRadius.lg,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#EEE',
+        borderColor: '#F1F5F9',
+        height: 54,
+        shadowColor: "#64748B",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    searchInput: {
+        fontSize: 15,
+        color: colors.textPrimary,
+        alignSelf: 'center',
+        fontWeight: '500',
     },
     listContent: {
         paddingHorizontal: spacing.lg,
         paddingBottom: spacing.xxl,
     },
     card: {
+        backgroundColor: '#FFFFFF',
+        marginBottom: 16,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+        paddingVertical: 16,
+        paddingHorizontal: 16, // Reduced padding for compact look
+        shadowColor: "#64748B",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    cardHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: spacing.md,
-        marginBottom: spacing.md,
-        borderRadius: borderRadius.xl,
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: '#F0F0F0',
     },
     avatarContainer: {
         position: 'relative',
-        marginRight: spacing.md,
+        marginRight: 12,
     },
     badgeContainer: {
         position: 'absolute',
-        bottom: 0,
-        right: -4,
-        backgroundColor: colors.warning,
+        bottom: -2,
+        right: -2,
+        backgroundColor: '#F59E0B',
         width: 18,
         height: 18,
         borderRadius: 9,
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1.5,
-        borderColor: '#FFF',
+        borderWidth: 2,
+        borderColor: '#FFFFFF',
     },
-    infoContainer: {
+    headerTextContainer: {
         flex: 1,
         justifyContent: 'center',
     },
@@ -415,42 +393,45 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '700',
         color: colors.textPrimary,
-        marginBottom: 4,
-    },
-    row: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingRight: 8,
-    },
-    roleTag: {
-        backgroundColor: `${colors.primary}15`,
-        alignSelf: 'flex-start',
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 8,
+        lineHeight: 20,
     },
     roleText: {
-        fontSize: 10,
-        color: colors.primary,
-        fontWeight: '700',
+        fontSize: 11,
+        color: colors.textMuted,
+        fontWeight: '600',
         textTransform: 'uppercase',
+        marginTop: 2,
     },
-    statsRow: {
+    cardDivider: {
+        height: 1,
+        backgroundColor: '#F1F5F9',
+        marginVertical: 14,
+    },
+    statsGrid: {
         flexDirection: 'row',
-        alignItems: 'center',
+        justifyContent: 'space-between',
     },
-    statBadge: {
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 6,
-        minWidth: 28,
+    statItem: {
         alignItems: 'center',
-        marginRight: 4,
+        flex: 1,
+    },
+    statIconContainer: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 6,
+    },
+    statCount: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        marginBottom: 2,
     },
     statLabel: {
         fontSize: 10,
-        fontWeight: '700',
+        color: colors.textSecondary,
+        fontWeight: '500',
     },
     arrowContainer: {
         justifyContent: 'center',
@@ -516,15 +497,17 @@ const styles = StyleSheet.create({
         marginBottom: spacing.sm,
     },
     filterChipsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
         paddingHorizontal: spacing.lg,
         paddingBottom: spacing.sm,
         gap: 8,
     },
     filterChip: {
-        marginRight: 8,
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.divider,
+        borderRadius: 20,
     },
     filterChipActive: {
         backgroundColor: colors.primary,

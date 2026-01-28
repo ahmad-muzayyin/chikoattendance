@@ -10,23 +10,16 @@ import adminRoutes from './routes/adminRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import shiftRoutes from './routes/shiftRoutes';
 import positionRoutes from './routes/positionRoutes';
+import eventRoutes from './routes/eventRoutes'; // Import Event Routes
 import { connectDB } from './config/db';
 import { User, UserRole } from './models/User';
+import { Event } from './models/Event'; // Import Event Model
 import { initAutoBackup } from './utils/backup';
 
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
-
-// ... (middleware code unchanged, no need to replace if not targeted, but tool replaces contiguous block)
-// I will target the imports and the startServer block separately or use a smaller chunk if possible but imports are at top and logic at bottom.
-
-// Let's do imports first manually or just overwrite the top part? 
-// The file is small, I can replace content strategically.
-
-// Let's Replace the Routes section and startServer section together if I encompass enough lines.
-// But it's safer to do 2 edits. Edit 1: Imports and Routes.
 
 app.use(cors());
 app.use(helmet());
@@ -38,8 +31,6 @@ app.use((req, res, next) => {
     next();
 });
 
-
-
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/attendance', attendanceRoutes);
@@ -48,6 +39,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/shifts', shiftRoutes);
 app.use('/api/positions', positionRoutes);
+app.use('/api/events', eventRoutes); // Register Event Routes
 
 // Test endpoint
 app.get('/api/ping', (req, res) => {

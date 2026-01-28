@@ -110,53 +110,58 @@ export default function UserListScreen() {
     };
 
     const renderItem = ({ item }: { item: any }) => (
-        <Surface style={styles.card} elevation={1}>
-            <View style={styles.cardContent}>
-                <View style={styles.avatarContainer}>
-                    <Avatar.Text
-                        size={50}
-                        label={item.name.substring(0, 2).toUpperCase()}
-                        style={{ backgroundColor: getRoleColor(item.role) }}
-                        color="#FFF"
-                    />
-                </View>
+        <Surface style={styles.card} elevation={0}>
+            {/* Top Row: Avatar + Main Info */}
+            <View style={styles.cardMain}>
+                <Avatar.Text
+                    size={48}
+                    label={item.name.substring(0, 2).toUpperCase()}
+                    style={[styles.avatar, { backgroundColor: `${getRoleColor(item.role)}10` }]}
+                    color={getRoleColor(item.role)}
+                    labelStyle={{ fontWeight: 'bold', fontSize: 16 }}
+                />
 
-                <View style={styles.infoContainer}>
-                    <View style={styles.headerRow}>
+                <View style={styles.userInfo}>
+                    <View style={styles.nameRow}>
                         <Text style={styles.userName} numberOfLines={1}>{item.name}</Text>
-                        {(item.Branch || item.branch) ? (
-                            <View style={styles.branchBadge}>
-                                <MaterialCommunityIcons name="store-marker" size={12} color={colors.textSecondary} />
-                                <Text style={styles.branchText}>{(item.Branch || item.branch).name}</Text>
-                            </View>
-                        ) : (
-                            <View style={[styles.branchBadge, { backgroundColor: '#F3F4F6' }]}>
-                                <MaterialCommunityIcons name="domain" size={12} color={colors.textMuted} />
-                                <Text style={styles.branchText}>Pusat / Semua</Text>
+                        {(item.Branch || item.branch) && (
+                            <View style={styles.branchPill}>
+                                <Text style={styles.branchPillText}>{(item.Branch || item.branch).name}</Text>
                             </View>
                         )}
                     </View>
 
-                    <Text style={styles.userEmail}>{item.email}</Text>
+                    <Text style={styles.userEmail} numberOfLines={1}>{item.email}</Text>
 
-                    <View style={styles.roleContainer}>
-                        <View style={[styles.roleBadge, { borderColor: getRoleColor(item.role), borderWidth: 1 }]}>
-                            <Text style={[styles.roleText, { color: getRoleColor(item.role) }]}>
+                    <View style={styles.badgesRow}>
+                        <View style={[styles.roleLabel, { backgroundColor: `${getRoleColor(item.role)}15` }]}>
+                            <Text style={[styles.roleLabelText, { color: getRoleColor(item.role) }]}>
                                 {item.role === 'EMPLOYEE' && item.position ? item.position : getRoleLabel(item.role)}
                             </Text>
                         </View>
                     </View>
                 </View>
+            </View>
 
-                <View style={styles.actionColumn}>
+            {/* Bottom Row: Contact + Actions */}
+            <View style={styles.cardFooter}>
+                <View style={styles.metaInfo}>
+                    <MaterialCommunityIcons name="card-account-details-outline" size={14} color="#94A3B8" />
+                    <Text style={styles.metaText}>{item.employeeId || '-'}</Text>
+                    <View style={styles.metaDot} />
+                    <MaterialCommunityIcons name="phone-outline" size={14} color="#94A3B8" />
+                    <Text style={styles.metaText}>{item.phone || '-'}</Text>
+                </View>
+
+                <View style={styles.actionRow}>
                     <TouchableOpacity
-                        style={[styles.actionBtn, { backgroundColor: '#EFF6FF' }]}
+                        style={styles.iconBtn}
                         onPress={() => navigation.navigate('UserForm' as any, { user: item })}
                     >
-                        <MaterialCommunityIcons name="pencil" size={18} color={colors.primary} />
+                        <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.primary} />
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={[styles.actionBtn, { backgroundColor: '#FEF2F2', marginTop: 8 }]}
+                        style={[styles.iconBtn, { marginLeft: 8, backgroundColor: '#FEF2F2' }]}
                         onPress={() => confirmDelete(item.id, item.name)}
                     >
                         <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.error} />
@@ -165,6 +170,7 @@ export default function UserListScreen() {
             </View>
         </Surface>
     );
+
 
     return (
         <View style={styles.container}>
@@ -251,15 +257,20 @@ export default function UserListScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background,
+        backgroundColor: '#F8FAFC',
     },
     headerContainer: {
-        backgroundColor: colors.surface,
-        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + spacing.sm : 20,
-        paddingBottom: spacing.sm,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.divider,
-        elevation: 2,
+        backgroundColor: '#FFFFFF',
+        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 10 : 30,
+        paddingBottom: 16,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        zIndex: 10,
     },
     searchBar: {
         margin: spacing.md,
@@ -282,76 +293,103 @@ const styles = StyleSheet.create({
         paddingBottom: 80,
     },
     card: {
-        borderRadius: borderRadius.lg,
-        backgroundColor: colors.surface,
-        marginBottom: spacing.md,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        marginBottom: 16,
         overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
     },
-    cardContent: {
+    cardMain: {
         flexDirection: 'row',
-        padding: spacing.md,
+        padding: 16,
+        paddingBottom: 12,
+        alignItems: 'center',
     },
-    avatarContainer: {
-        marginRight: spacing.md,
-        justifyContent: 'center',
+    avatar: {
+        marginRight: 16,
     },
-    infoContainer: {
+    userInfo: {
         flex: 1,
-        justifyContent: 'center',
     },
-    headerRow: {
+    nameRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        flexWrap: 'wrap',
         marginBottom: 2,
     },
     userName: {
         fontSize: 16,
-        fontWeight: 'bold',
-        color: colors.textPrimary,
-        flex: 1,
+        fontWeight: '700',
+        color: '#1E293B',
+        marginRight: 8,
     },
-    branchBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F3F4F6',
+    branchPill: {
+        backgroundColor: '#F1F5F9', // Very light grey
         paddingHorizontal: 6,
         paddingVertical: 2,
-        borderRadius: 4,
-        marginLeft: 4,
-        maxWidth: 100,
+        borderRadius: 6,
     },
-    branchText: {
+    branchPillText: {
         fontSize: 10,
-        color: colors.textSecondary,
-        marginLeft: 2,
+        color: '#64748B',
+        fontWeight: '600',
     },
     userEmail: {
-        fontSize: 12,
-        color: colors.textSecondary,
+        fontSize: 13,
+        color: '#64748B',
         marginBottom: 6,
     },
-    roleContainer: {
+    badgesRow: {
         flexDirection: 'row',
+        alignItems: 'center',
     },
-    roleBadge: {
+    roleLabel: {
         paddingHorizontal: 8,
-        paddingVertical: 1,
-        borderRadius: 12,
-        backgroundColor: 'transparent',
+        paddingVertical: 3,
+        borderRadius: 8,
+        alignSelf: 'flex-start',
     },
-    roleText: {
+    roleLabelText: {
         fontSize: 10,
         fontWeight: '700',
+        textTransform: 'uppercase',
     },
-    actionColumn: {
-        justifyContent: 'center',
-        marginLeft: spacing.sm,
+    cardFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#F8FAFC',
+        backgroundColor: '#FCFCFD',
     },
-    actionBtn: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+    metaInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    metaText: {
+        fontSize: 11,
+        color: '#94A3B8',
+        marginLeft: 4,
+    },
+    metaDot: {
+        width: 3,
+        height: 3,
+        borderRadius: 1.5,
+        backgroundColor: '#CBD5E1',
+        marginHorizontal: 8,
+    },
+    actionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    iconBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#EFF6FF',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -366,10 +404,12 @@ const styles = StyleSheet.create({
     },
     fab: {
         position: 'absolute',
-        margin: 16,
+        margin: 20,
         right: 0,
-        bottom: 0,
+        bottom: 10,
         backgroundColor: colors.primary,
-        borderRadius: 16,
+        borderRadius: 28,
+        elevation: 6,
+        zIndex: 20,
     },
 });
