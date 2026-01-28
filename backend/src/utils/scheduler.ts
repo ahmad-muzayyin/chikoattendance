@@ -30,8 +30,8 @@ export const initScheduler = () => {
             });
 
             for (const user of users) {
-                // 2. Check if attendance exists for today
-                const attendance = await Attendance.findOne({
+                // 2. Get all attendance records for today
+                const todayAttendances = await Attendance.findAll({
                     where: {
                         userId: user.id,
                         timestamp: {
@@ -40,15 +40,23 @@ export const initScheduler = () => {
                     }
                 });
 
-                // 3. If no attendance, mark as ALPHA
-                if (!attendance) {
-                    console.log(`[Scheduler] Marking ALPHA for User: ${user.name} (${user.id})`);
+                const hasCheckIn = todayAttendances.some(a => a.type === AttendanceType.CHECK_IN);
+                const hasCheckOut = todayAttendances.some(a => a.type === AttendanceType.CHECK_OUT);
+                // Check if they already have Permit/Sick/Alpha to avoid double penalizing
+                const hasSpecialStatus = todayAttendances.some(a =>
+                    [AttendanceType.PERMIT, AttendanceType.SICK, AttendanceType.ALPHA].includes(a.type)
+                );
 
-                    // Create Alpha Record
+                if (hasSpecialStatus) continue;
+
+                // Scenario A: No Attendance at all -> ALPHA
+                if (!hasCheckIn) {
+                    console.log(`[Scheduler] Marking ALPHA (No Show) for User: ${user.name} (${user.id})`);
+
                     await Attendance.create({
                         userId: user.id,
                         type: AttendanceType.ALPHA,
-                        timestamp: new Date(), // Mark at 23:55
+                        timestamp: new Date(),
                         latitude: 0,
                         longitude: 0,
                         deviceId: 'SYSTEM_SCHEDULER',
@@ -58,22 +66,52 @@ export const initScheduler = () => {
                         notes: 'Tidak Absen (Auto Alpha)'
                     });
 
-                    // Create Punishment (e.g., 20 points for Alpha)
-                    const penaltyPoints = 20;
+                    // Punishment for No Show
                     await Punishment.create({
                         userId: user.id,
-                        points: penaltyPoints,
+                        points: 20,
                         reason: 'Alpha (Tidak Masuk Tanpa Keterangan)',
                         date: new Date()
                     });
 
-                    // Send Notification
-                    // Only send if token exists, handled by util
                     await sendPushNotification(
                         [user.id],
                         'Terhitung Alpha',
                         'Anda tidak melakukan absensi hari ini. Sistem mencatat sebagai Alpha (-20 Poin).',
                         { type: 'ALPHA_ALERT' }
+                    );
+                }
+                // Scenario B: Checked In but Forgot Checkout -> INVALID (Treat as ALPHA but lighter penalty)
+                else if (hasCheckIn && !hasCheckOut) {
+                    console.log(`[Scheduler] Marking ALPHA (No Checkout) for User: ${user.name} (${user.id})`);
+
+                    // Create ALPHA record to invalidate the day
+                    await Attendance.create({
+                        userId: user.id,
+                        type: AttendanceType.ALPHA,
+                        timestamp: new Date(),
+                        latitude: 0,
+                        longitude: 0,
+                        deviceId: 'SYSTEM_SCHEDULER',
+                        isLate: false,
+                        isOvertime: false,
+                        isHalfDay: false,
+                        notes: 'Lupa Check-out (Dianggap Alpha)'
+                    });
+
+                    // Punishment for Forgetting Checkout: ONLY 2 POINTS
+                    await Punishment.create({
+                        userId: user.id,
+                        points: 2,
+                        reason: 'Lupa Check-out (Sanksi Ringan)',
+                        date: new Date()
+                    });
+
+                    await sendPushNotification(
+                        [user.id],
+                        'Lupa Check-out',
+                        'Anda lupa Check-out hari ini. Kehadiran dianggap tidak sah & sanksi -2 Poin.',
+                        { type: 'CHECKOUT_ALERT' }
                     );
                 }
             }
