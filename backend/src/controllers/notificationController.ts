@@ -68,9 +68,9 @@ export const sendTestNotification = async (req: AuthRequest, res: Response) => {
         const { sendPushNotification } = require('../utils/notifications');
         await sendPushNotification(
             [userId],
-            'Test Notifikasi',
-            'Ini adalah notifikasi percobaan dari server Chiko Attendance.',
-            { type: 'SUCCESS' }
+            'Jangan Lupa Absen!',
+            'Jangan lupa melakukan Absensi Masuk/Pulang hari ini ya!',
+            { type: 'REMINDER' }
         );
 
         res.json({ message: 'Notifikasi test dikirim!' });
