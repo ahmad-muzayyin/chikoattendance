@@ -59,3 +59,23 @@ export const deleteNotification = async (req: AuthRequest, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+export const sendTestNotification = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+        const { sendPushNotification } = require('../utils/notifications');
+        await sendPushNotification(
+            [userId],
+            'Test Notifikasi',
+            'Ini adalah notifikasi percobaan dari server Chiko Attendance.',
+            { type: 'SUCCESS' }
+        );
+
+        res.json({ message: 'Notifikasi test dikirim!' });
+    } catch (error) {
+        console.error('Test notif error', error);
+        res.status(500).json({ message: 'Gagal mengirim test notifikasi' });
+    }
+};

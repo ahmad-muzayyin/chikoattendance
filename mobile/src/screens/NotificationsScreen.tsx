@@ -68,6 +68,19 @@ export default function NotificationsScreen() {
         }
     };
 
+    const triggerTestNotif = async () => {
+        try {
+            const token = await SecureStore.getItemAsync('authToken');
+            await axios.post(`${API_CONFIG.BASE_URL}/notifications/test`, {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            alert('Test notifikasi dikirim! Tunggu sebentar...');
+        } catch (error) {
+            console.error(error);
+            alert('Gagal mengirim test notif');
+        }
+    };
+
     useEffect(() => {
         fetchNotifications();
     }, []);
@@ -138,6 +151,7 @@ export default function NotificationsScreen() {
                 <IconButton icon="arrow-left" iconColor="white" onPress={() => navigation.goBack()} />
                 <Text style={styles.headerTitle}>Notifikasi</Text>
                 <IconButton icon="check-all" iconColor="white" onPress={markAllRead} />
+                <IconButton icon="bell-ring" iconColor="white" onPress={() => triggerTestNotif()} />
             </View>
 
             {loading ? (
