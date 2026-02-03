@@ -8,7 +8,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { API_CONFIG, ENDPOINTS } from '../config/api';
 import { colors, spacing, borderRadius, shadows } from '../theme/theme';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Alert, Platform } from 'react-native';
 
