@@ -70,7 +70,7 @@ export const exportBranchExcel = async (req: AuthRequest, res: Response) => {
         let rowIndex = 5;
 
         employees.forEach(emp => {
-            const attendances = emp.Attendances || [];
+            const attendances = (emp as any).Attendances || [];
 
             // Calculate Stats
             // Note: This logic duplicates what's in frontend/adminController. 
@@ -174,7 +174,7 @@ export const exportBranchPDF = async (req: AuthRequest, res: Response) => {
 
         // Table Data
         const tableData = employees.map(emp => {
-            const attendances = emp.Attendances || [];
+            const attendances = (emp as any).Attendances || [];
 
             // Stats logic
             const dailyStats: Record<string, any> = {};
