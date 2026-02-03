@@ -63,10 +63,14 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
 
+import { usePushNotifications } from '../hooks/usePushNotifications';
+
 function MainTabNavigator() {
     const { user } = useAuth();
+    usePushNotifications(); // Trigger notification registration
     const isOwner = user?.role === 'OWNER';
     const insets = useSafeAreaInsets();
+
 
     // Default paddingBottom if insets.bottom is 0 (e.g. physical buttons outside screen)
     // If insets.bottom > 0 (e.g. iPhone X or Android with gestures), we use that.
