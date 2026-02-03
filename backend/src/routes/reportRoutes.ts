@@ -1,6 +1,6 @@
 
 import express from 'express';
-import { authenticate, authorize } from '../middleware/authMiddleware';
+import { authenticateToken as authenticate, requireRole as authorize } from '../middleware/authMiddleware';
 import { UserRole } from '../models/User';
 import { exportBranchExcel, exportBranchPDF } from '../controllers/reportController';
 

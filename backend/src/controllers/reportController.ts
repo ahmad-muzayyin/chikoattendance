@@ -160,7 +160,7 @@ export const exportBranchPDF = async (req: AuthRequest, res: Response) => {
             order: [['name', 'ASC']]
         });
 
-        const doc = new PDFDocument({ margin: 30, size: 'A4' });
+        const doc: any = new PDFDocument({ margin: 30, size: 'A4' });
 
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename=Rekap_${branch.name}_${month}_${year}.pdf`);

@@ -43,6 +43,7 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
     public googleId!: string | null;
     public readonly Branch?: Branch;
     public readonly Shift?: Shift;
+    public readonly Attendances?: any[]; // For eager loading
 
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
