@@ -148,10 +148,14 @@ export default function NotificationsScreen() {
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <IconButton icon="arrow-left" iconColor="white" onPress={() => navigation.goBack()} />
-                <Text style={styles.headerTitle}>Notifikasi</Text>
-                <IconButton icon="check-all" iconColor="white" onPress={markAllRead} />
-                <IconButton icon="bell-ring" iconColor="white" onPress={() => triggerTestNotif()} />
+                <View style={styles.headerLeft}>
+                    <IconButton icon="arrow-left" iconColor="white" onPress={() => navigation.goBack()} />
+                    <Text style={styles.headerTitle}>Notifikasi</Text>
+                </View>
+                <View style={styles.headerRight}>
+                    <IconButton icon="bell-ring" iconColor="white" onPress={() => triggerTestNotif()} />
+                    <IconButton icon="check-all" iconColor="white" onPress={markAllRead} />
+                </View>
             </View>
 
             {loading ? (
@@ -188,24 +192,30 @@ const styles = StyleSheet.create({
         backgroundColor: colors.background,
     },
     header: {
-        height: 110, // Taller header
+        height: 100, // Slightly reduced height
         backgroundColor: colors.primary,
         flexDirection: 'row',
-        alignItems: 'flex-end', // Align content to bottom
+        alignItems: 'flex-end',
         justifyContent: 'space-between',
-        paddingHorizontal: 8,
-        paddingBottom: 12,
+        paddingHorizontal: 4, // Reduced padding to fit buttons
+        paddingBottom: 8,
         elevation: 6,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
+    },
+    headerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    headerRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
     },
     headerTitle: {
         fontSize: 20,
         fontWeight: 'bold',
         color: 'white',
-        marginBottom: 8, // Align with buttons
+        marginLeft: 4,
     },
     center: {
         flex: 1,
