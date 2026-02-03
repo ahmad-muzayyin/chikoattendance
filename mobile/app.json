@@ -28,7 +28,6 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#EC1616"
       },
-      "googleServicesFile": "./google-services.json",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyAiaa3pD1NmlOd0UVUudS5hezR083O-LGo"
@@ -60,7 +59,9 @@
       "@react-native-community/datetimepicker"
     ],
     "extra": {
-      "eas": {}
+      "eas": {
+        "projectId": "5d34e301-94d3-4555-9ab0-134a376cc49e"
+      }
     }
   }
 }
