@@ -60,20 +60,43 @@ export const deleteNotification = async (req: AuthRequest, res: Response) => {
     }
 };
 
+import { User } from '../models/User';
+
 export const sendTestNotification = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
+        const userRole = req.user?.role;
+
         if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
         const { sendPushNotification } = require('../utils/notifications');
+
+        let targetIds: number[] = [];
+        let title = 'Jangan Lupa Absen!';
+        let message = 'Jangan lupa melakukan Absensi Masuk/Pulang hari ini ya!';
+
+        // If OWNER triggers this, broadcast to ALL users
+        if (userRole === 'OWNER') {
+            const allUsers = await User.findAll({ attributes: ['id'] });
+            targetIds = allUsers.map(u => u.id);
+            console.log(`[Broadcast] Owner ${userId} sending notification to ${targetIds.length} users.`);
+
+            // Optional: Customize message for broadcast
+            title = 'PENGUMUMAN';
+            message = 'Jangan lupa untuk melakukan Absensi hari ini. Semangat bekerja!';
+        } else {
+            // Default: Send only to self
+            targetIds = [userId];
+        }
+
         await sendPushNotification(
-            [userId],
-            'Jangan Lupa Absen!',
-            'Jangan lupa melakukan Absensi Masuk/Pulang hari ini ya!',
+            targetIds,
+            title,
+            message,
             { type: 'REMINDER' }
         );
 
-        res.json({ message: 'Notifikasi test dikirim!' });
+        res.json({ message: `Notifikasi dikirim ke ${targetIds.length} pengguna!` });
     } catch (error) {
         console.error('Test notif error', error);
         res.status(500).json({ message: 'Gagal mengirim test notifikasi' });
