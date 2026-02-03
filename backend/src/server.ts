@@ -11,6 +11,7 @@ import notificationRoutes from './routes/notificationRoutes';
 import shiftRoutes from './routes/shiftRoutes';
 import positionRoutes from './routes/positionRoutes';
 import eventRoutes from './routes/eventRoutes'; // Import Event Routes
+import reportRoutes from './routes/reportRoutes'; // Import Report Routes
 import { connectDB } from './config/db';
 import { User, UserRole } from './models/User';
 import { Event } from './models/Event'; // Import Event Model
@@ -40,6 +41,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/shifts', shiftRoutes);
 app.use('/api/positions', positionRoutes);
 app.use('/api/events', eventRoutes); // Register Event Routes
+app.use('/api/reports', reportRoutes); // Register Report Routes
 
 // Test endpoint
 app.get('/api/ping', (req, res) => {

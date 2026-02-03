@@ -8,6 +8,9 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { API_CONFIG, ENDPOINTS } from '../config/api';
 import { colors, spacing, borderRadius, shadows } from '../theme/theme';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { Alert, Platform } from 'react-native';
 
 const months = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -31,6 +34,47 @@ export default function OwnerRecapEmployeesScreen() {
     const [tempMonth, setTempMonth] = useState(month);
     const [tempYear, setTempYear] = useState(year);
     const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
+
+    // Export States
+    const [exportDialogVisible, setExportDialogVisible] = useState(false);
+    const [downloading, setDownloading] = useState(false);
+
+    const downloadReport = async (type: 'excel' | 'pdf') => {
+        setExportDialogVisible(false);
+        setDownloading(true);
+        try {
+            const token = await SecureStore.getItemAsync('authToken');
+            const fileType = type === 'excel' ? 'xlsx' : 'pdf';
+            const endpoint = `${API_CONFIG.BASE_URL}/reports/branch/${branchId}/${type}?month=${month}&year=${year}`;
+
+            const fileName = `Rekap_${branchName.replace(/\s+/g, '_')}_${months[month - 1]}_${year}.${fileType}`;
+            const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+
+            // Download
+            const result = await FileSystem.downloadAsync(
+                endpoint,
+                fileUri,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            if (result.status !== 200) {
+                throw new Error('Gagal mengunduh laporan. Cek koneksi atau data.');
+            }
+
+            // Share/Save
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(result.uri);
+            } else {
+                Alert.alert('Info', `File tersimpan di: ${result.uri}`);
+            }
+
+        } catch (error: any) {
+            console.error('Download error:', error);
+            Alert.alert('Error', 'Gagal mengunduh laporan.');
+        } finally {
+            setDownloading(false);
+        }
+    };
 
     const fetchEmployees = async () => {
         setLoading(true);
@@ -225,9 +269,46 @@ export default function OwnerRecapEmployeesScreen() {
                         <Text style={styles.pickerLabel}>Periode Absensi</Text>
                         <Text style={styles.pickerValue}>{months[month - 1]} {year}</Text>
                     </View>
-                    <MaterialCommunityIcons name="chevron-down" size={20} color={colors.textMuted} style={{ marginLeft: 'auto' }} />
+                    <MaterialCommunityIcons name="chevron-down" size={20} color={colors.textMuted} style={{ marginLeft: 8 }} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.exportBtn}
+                    onPress={() => setExportDialogVisible(true)}
+                    disabled={downloading}
+                >
+                    {downloading ? (
+                        <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                        <MaterialCommunityIcons name="file-download-outline" size={22} color="white" />
+                    )}
                 </TouchableOpacity>
             </Surface>
+
+            {/* Export Dialog */}
+            <Portal>
+                <Dialog visible={exportDialogVisible} onDismiss={() => setExportDialogVisible(false)} style={styles.dialog}>
+                    <Dialog.Title style={styles.dialogTitle}>Export Laporan</Dialog.Title>
+                    <Dialog.Content>
+                        <Text style={{ textAlign: 'center', marginBottom: 20, color: colors.textSecondary }}>
+                            Pilih format laporan untuk periode {months[month - 1]} {year}
+                        </Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+                            <TouchableOpacity style={styles.fileTypeBtn} onPress={() => downloadReport('excel')}>
+                                <MaterialCommunityIcons name="file-excel" size={40} color="#1D6F42" />
+                                <Text style={styles.fileTypeLabel}>Excel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.fileTypeBtn} onPress={() => downloadReport('pdf')}>
+                                <MaterialCommunityIcons name="file-pdf-box" size={40} color="#F40F02" />
+                                <Text style={styles.fileTypeLabel}>PDF</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </Dialog.Content>
+                    <Dialog.Actions>
+                        <Button onPress={() => setExportDialogVisible(false)}>Batal</Button>
+                    </Dialog.Actions>
+                </Dialog>
+            </Portal>
 
             {/* Search Bar */}
             <View style={styles.searchContainer}>
@@ -598,4 +679,27 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         paddingHorizontal: 20,
     },
+    exportBtn: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        backgroundColor: colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 10,
+        ...shadows.sm,
+    },
+    fileTypeBtn: {
+        alignItems: 'center',
+        padding: 15,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.divider,
+        width: 100
+    },
+    fileTypeLabel: {
+        marginTop: 8,
+        fontWeight: 'bold',
+        color: colors.textPrimary
+    }
 });

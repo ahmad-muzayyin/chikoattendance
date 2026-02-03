@@ -51,24 +51,34 @@ export default function AddBranchScreen() {
 
     const searchLocation = async () => {
         if (!searchQuery.trim()) return;
+
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Izin Ditolak', 'Aplikasi membutuhkan izin lokasi untuk mencari alamat.');
+            return;
+        }
+
         setSearchLoading(true);
         try {
             const geocodedLocation = await Location.geocodeAsync(searchQuery);
             if (geocodedLocation.length > 0) {
-                setLatitude(latitude.toString());
-                setLongitude(longitude.toString());
+                const target = geocodedLocation[0];
+                setLatitude(target.latitude.toString());
+                setLongitude(target.longitude.toString());
                 setRegion({
-                    latitude,
-                    longitude,
+                    latitude: target.latitude,
+                    longitude: target.longitude,
                     latitudeDelta: 0.005,
                     longitudeDelta: 0.005,
                 });
             } else {
-                Alert.alert('Tidak Ditemukan', 'Lokasi tidak ditemukan. Coba kata kunci lain.');
+                Alert.alert('Tidak Ditemukan', 'Lokasi tidak ditemukan. Coba kata kunci lain atau gunakan nama kota yang lebih spesifik.');
             }
-        } catch (error) {
-            console.log(error);
-            Alert.alert('Error', 'Gagal mencari lokasi. Pastikan internet aktif.');
+        } catch (error: any) {
+            console.log('Geocoding Error:', error);
+            // On Android, geocoding often fails if the device lacks Play Services or has network issues
+            const errorMessage = error?.message || 'Pastikan internet aktif dan Google Play Services tersedia.';
+            Alert.alert('Gagal Mencari Lokasi', `Terjadi kesalahan saat mencari lokasi.\n\nDetail: ${errorMessage}`);
         } finally {
             setSearchLoading(false);
         }

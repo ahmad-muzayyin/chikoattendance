@@ -23,7 +23,7 @@
     },
     "android": {
       "package": "com.chiko.attendance",
-      "versionCode": 2,
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#EC1616"
@@ -55,7 +55,6 @@
       ],
       "@react-native-community/datetimepicker"
     ],
-    "newArchEnabled": false,
     "extra": {
       "eas": {
         "projectId": "0c277e4c-50cb-4331-a6d0-fb9c11201c94"
