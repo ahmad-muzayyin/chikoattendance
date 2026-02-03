@@ -28,6 +28,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#EC1616"
       },
+      "googleServicesFile": "./google-services.json",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyAiaa3pD1NmlOd0UVUudS5hezR083O-LGo"
@@ -37,7 +38,9 @@
         "CAMERA",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "INTERNET"
+        "INTERNET",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
       ]
     },
     "web": {
@@ -45,6 +48,7 @@
     },
     "plugins": [
       "expo-font",
+      "expo-notifications",
       [
         "expo-build-properties",
         {
