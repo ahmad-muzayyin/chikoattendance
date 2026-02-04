@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Text, Surface, Divider } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import { Text, Surface, Divider, Modal, Portal, Button } from 'react-native-paper';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -26,6 +26,11 @@ export default function RecapDetailScreen() {
 
     const [loading, setLoading] = useState(true);
     const [history, setHistory] = useState<HistoryItem[]>([]);
+    const [photoModal, setPhotoModal] = useState<{ visible: boolean, photoUrl: string | null, data: any }>({
+        visible: false,
+        photoUrl: null,
+        data: null
+    });
 
     useEffect(() => {
         fetchHistory();
@@ -250,12 +255,131 @@ export default function RecapDetailScreen() {
                                             )}
                                         </View>
                                     </View>
+
+                                    {/* Photo Buttons */}
+                                    <View style={styles.photoButtonsRow}>
+                                        <TouchableOpacity
+                                            style={[styles.photoButton, { flex: 1, marginRight: 4 }]}
+                                            onPress={() => setPhotoModal({
+                                                visible: true,
+                                                photoUrl: item.checkIn?.photoUrl,
+                                                data: {
+                                                    type: 'CHECK-IN',
+                                                    time: item.checkIn?.timestamp,
+                                                    notes: item.checkIn?.notes
+                                                }
+                                            })}
+                                        >
+                                            <MaterialCommunityIcons
+                                                name={item.checkIn?.photoUrl ? "camera" : "camera-off"}
+                                                size={16}
+                                                color={item.checkIn?.photoUrl ? colors.primary : colors.textMuted}
+                                            />
+                                            <Text style={[styles.photoButtonText, !item.checkIn?.photoUrl && { color: colors.textMuted }]}>
+                                                {item.checkIn ? 'Foto Masuk' : 'Tidak Masuk'}
+                                            </Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={[styles.photoButton, { flex: 1, marginLeft: 4 }]}
+                                            onPress={() => setPhotoModal({
+                                                visible: true,
+                                                photoUrl: item.checkOut?.photoUrl,
+                                                data: {
+                                                    type: 'CHECK-OUT',
+                                                    time: item.checkOut?.timestamp,
+                                                    notes: item.checkOut?.notes
+                                                }
+                                            })}
+                                        >
+                                            <MaterialCommunityIcons
+                                                name={item.checkOut?.photoUrl ? "camera" : "camera-off"}
+                                                size={16}
+                                                color={item.checkOut?.photoUrl ? colors.error : colors.textMuted}
+                                            />
+                                            <Text style={[styles.photoButtonText, !item.checkOut?.photoUrl && { color: colors.textMuted }]}>
+                                                {item.checkOut ? 'Foto Pulang' : 'Tidak Pulang'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
                                 </Surface>
                             );
                         })
                     )}
                 </ScrollView>
             )}
+
+            {/* Photo Modal */}
+            <Portal>
+                <Modal
+                    visible={photoModal.visible}
+                    onDismiss={() => setPhotoModal({ visible: false, photoUrl: null, data: null })}
+                    contentContainerStyle={styles.photoModalContainer}
+                >
+                    <View style={styles.photoModalContent}>
+                        {/* Header */}
+                        <View style={styles.photoModalHeader}>
+                            <View style={[styles.photoTypeBadge, { backgroundColor: photoModal.data?.type === 'CHECK-IN' ? '#DCFCE7' : '#FEF2F2' }]}>
+                                <MaterialCommunityIcons
+                                    name={photoModal.data?.type === 'CHECK-IN' ? 'login' : 'logout'}
+                                    size={16}
+                                    color={photoModal.data?.type === 'CHECK-IN' ? colors.success : colors.error}
+                                />
+                                <Text style={[styles.photoTypeText, { color: photoModal.data?.type === 'CHECK-IN' ? colors.success : colors.error }]}>
+                                    {photoModal.data?.type}
+                                </Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setPhotoModal({ visible: false, photoUrl: null, data: null })}>
+                                <MaterialCommunityIcons name="close-circle" size={28} color={colors.textMuted} />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Photo */}
+                        {photoModal.photoUrl ? (
+                            <Image
+                                source={{ uri: photoModal.photoUrl }}
+                                style={styles.photoImage}
+                                resizeMode="contain"
+                            />
+                        ) : (
+                            <View style={styles.noPhotoView}>
+                                <MaterialCommunityIcons name="image-off" size={60} color={colors.textMuted} />
+                                <Text style={styles.noPhotoViewText}>Tidak ada foto dilampirkan</Text>
+                            </View>
+                        )}
+
+                        {/* Details */}
+                        <View style={styles.photoDetails}>
+                            <View style={styles.photoDetailRow}>
+                                <MaterialCommunityIcons name="clock-outline" size={18} color={colors.textSecondary} />
+                                <Text style={styles.photoDetailLabel}>Waktu:</Text>
+                                <Text style={styles.photoDetailValue}>
+                                    {photoModal.data?.time ? new Date(photoModal.data.time).toLocaleString('id-ID') : '-'}
+                                </Text>
+                            </View>
+
+                            {photoModal.data?.notes && (
+                                <View style={[styles.photoDetailRow, { alignItems: 'flex-start' }]}>
+                                    <MaterialCommunityIcons name="note-text" size={18} color={colors.textSecondary} />
+                                    <Text style={styles.photoDetailLabel}>Catatan:</Text>
+                                    <Text style={[styles.photoDetailValue, { flex: 1 }]}>
+                                        {photoModal.data.notes}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        <Button
+                            mode="contained"
+                            onPress={() => setPhotoModal({ visible: false, photoUrl: null, data: null })}
+                            style={styles.photoCloseButton}
+                            labelStyle={{ fontWeight: 'bold' }}
+                        >
+                            Tutup
+                        </Button>
+                    </View>
+                </Modal>
+            </Portal>
         </View>
     );
 }
@@ -415,4 +539,104 @@ const styles = StyleSheet.create({
     notes: { fontSize: 11, color: colors.textMuted, marginTop: 4, textAlign: 'center' },
     emptyState: { alignItems: 'center', marginTop: 50 },
     emptyText: { marginTop: 10, color: colors.textMuted },
+    // Photo Button Styles
+    photoButtonsRow: {
+        flexDirection: 'row',
+        marginTop: 12,
+        justifyContent: 'space-between',
+        borderTopWidth: 1,
+        borderTopColor: colors.divider,
+        paddingTop: 12,
+    },
+    photoButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        backgroundColor: colors.background,
+        borderRadius: 8,
+    },
+    photoButtonText: {
+        fontSize: 12,
+        fontWeight: '600',
+        marginLeft: 6,
+        color: colors.textPrimary,
+    },
+    // Modal Styles
+    photoModalContainer: {
+        padding: 20,
+        margin: 20,
+    },
+    photoModalContent: {
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: 20,
+        elevation: 5,
+    },
+    photoModalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    photoTypeBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 20,
+    },
+    photoTypeText: {
+        fontWeight: 'bold',
+        marginLeft: 5,
+        fontSize: 12,
+    },
+    photoImage: {
+        width: '100%',
+        height: 300,
+        borderRadius: 12,
+        backgroundColor: '#F3F4F6',
+        marginBottom: 20,
+    },
+    noPhotoView: {
+        width: '100%',
+        height: 200,
+        borderRadius: 12,
+        backgroundColor: '#F3F4F6',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    noPhotoViewText: {
+        marginTop: 10,
+        color: colors.textMuted,
+        fontStyle: 'italic',
+    },
+    photoDetails: {
+        marginBottom: 20,
+        backgroundColor: colors.background,
+        padding: 12,
+        borderRadius: 12,
+    },
+    photoDetailRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    photoDetailLabel: {
+        fontSize: 12,
+        color: colors.textSecondary,
+        width: 60,
+        marginLeft: 8,
+    },
+    photoDetailValue: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: colors.textPrimary,
+    },
+    photoCloseButton: {
+        backgroundColor: colors.primary,
+        borderRadius: 12,
+    },
 });

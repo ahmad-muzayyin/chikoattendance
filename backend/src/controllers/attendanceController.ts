@@ -90,19 +90,19 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
             visitedBranchName = branch.name;
         }
 
-        // 2. Check for double check-in
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
+        // 2. Check for double check-in (Using Jakarta Time)
+        const now = new Date();
+        const jakartaDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }); // YYYY-MM-DD
+        const todayStart = new Date(`${jakartaDateStr}T00:00:00+07:00`);
+        const todayEnd = new Date(`${jakartaDateStr}T23:59:59.999+07:00`);
 
         const existingCheckIn = await Attendance.findOne({
             where: {
                 userId,
                 type: AttendanceType.CHECK_IN,
                 timestamp: {
-                    [Op.gte]: today,
-                    [Op.lt]: tomorrow
+                    [Op.gte]: todayStart,
+                    [Op.lte]: todayEnd
                 }
             }
         });
@@ -112,7 +112,6 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
         }
 
         // 3. Smart Shift Detection Logic & Late Calc
-        const now = new Date();
         let isLate = false;
         let isHalfDay = false;
         let warningMessage = '';
@@ -247,7 +246,7 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
 
 export const checkOut = async (req: AuthRequest, res: Response) => {
     try {
-        const { latitude, longitude, deviceId, isOvertime: isOvertimeClaimed, notes } = req.body;
+        const { latitude, longitude, deviceId, isOvertime: isOvertimeClaimed, notes, photoUrl } = req.body;
         const userId = req.user?.id;
 
         if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -318,19 +317,18 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
             }
         }
 
-        // Validation: Prevent Multiple Check-Outs per Day
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
+        // Validation: Prevent Multiple Check-Outs per Day (Jakarta Time)
+        const jakartaDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+        const todayStart = new Date(`${jakartaDateStr}T00:00:00+07:00`);
+        const todayEnd = new Date(`${jakartaDateStr}T23:59:59.999+07:00`);
 
         const existingCheckOut = await Attendance.findOne({
             where: {
                 userId,
                 type: AttendanceType.CHECK_OUT,
                 timestamp: {
-                    [Op.gte]: today,
-                    [Op.lt]: tomorrow
+                    [Op.gte]: todayStart,
+                    [Op.lte]: todayEnd
                 }
             }
         });
@@ -339,14 +337,14 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: 'Anda sudah melakukan Check-out hari ini. Data tidak dapat diubah.' });
         }
 
-        // Validation: Must Have Checked-In Today
+        // Validation: Must Have Checked-In Today (Jakarta Time)
         const existingCheckIn = await Attendance.findOne({
             where: {
                 userId,
                 type: AttendanceType.CHECK_IN,
                 timestamp: {
-                    [Op.gte]: today,
-                    [Op.lt]: tomorrow
+                    [Op.gte]: todayStart,
+                    [Op.lte]: todayEnd
                 }
             }
         });
@@ -423,7 +421,8 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
             isLate: false,
             isOvertime,
             isHalfDay: false,
-            notes: notes || (isOvertime ? `Lembur (${detectedShiftName})` : `Pulang (${detectedShiftName})`)
+            notes: notes || (isOvertime ? `Lembur (${detectedShiftName})` : `Pulang (${detectedShiftName})`),
+            photoUrl
         });
 
         res.status(201).json({
@@ -467,7 +466,8 @@ export const getCalendar = async (req: AuthRequest, res: Response) => {
         // Format data for calendar
         const calendarData = attendances.map(att => {
             const date = new Date(att.timestamp);
-            const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
+            // Fix: Use WIB date for mapping to catch mismatches
+            const dateStr = date.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }); // YYYY-MM-DD
 
             let status = 'onTime';
             // Force WIB Timezone for Display

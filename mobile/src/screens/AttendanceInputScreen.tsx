@@ -255,7 +255,7 @@ export default function AttendanceInputScreen() {
             }
         }
 
-        if (type === 'CHECK_IN' && !photo) {
+        if (!photo) {
             setResultModal({ visible: true, type: 'error', message: 'Foto Selfie wajib diambil sebagai bukti kehadiran.' });
             return;
         }
