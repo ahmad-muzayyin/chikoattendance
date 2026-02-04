@@ -22,7 +22,8 @@ Agar aplikasi mobile bisa menerima pesan FCM langsung:
 1. Di Firebase Console, masuk ke **Project Settings** > **General**.
 2. Pastikan ada aplikasi Android dengan package name: `com.chiko.attendance`.
 3. Download file `google-services.json`.
-4. **Upload file tersebut ke folder root mobile** (sejajar dengan `app.json`).
+4. Pada langkah **"Add Firebase SDK"** di Firebase Console, silakan klik **Next** (Lewati) karena konfigurasi SDK sudah ditangani secara otomatis oleh Expo Build Plugin.
+5. **Upload file tersebut ke folder root mobile** (sejajar dengan `app.json`).
    - path: `mobile/google-services.json`
 
 ## 3. Build Ulang

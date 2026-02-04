@@ -43,13 +43,22 @@ export const sendPushNotification = async (userIds: number[], title: string, bod
         }
 
         // A. Send Expo Messages
+        // Handling PUSH_TOO_MANY_EXPERIENCE_IDS gracefully
         if (expoMessages.length > 0) {
             const chunks = expo.chunkPushNotifications(expoMessages);
             for (const chunk of chunks) {
                 try {
                     await expo.sendPushNotificationsAsync(chunk);
-                } catch (error) {
-                    console.error('[Expo] Error sending push chunk:', error);
+                } catch (error: any) {
+                    if (error.code === 'PUSH_TOO_MANY_EXPERIENCE_IDS') {
+                        console.warn('[Expo] Error: Token conflict (Mixed Project IDs).');
+                        // Log specific details if needed
+                        if (error.details) {
+                            console.warn('Conflict Details:', JSON.stringify(error.details));
+                        }
+                    } else {
+                        console.error('[Expo] Error sending push chunk:', error);
+                    }
                 }
             }
         }
