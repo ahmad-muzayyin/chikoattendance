@@ -122,89 +122,109 @@ export const initScheduler = () => {
 
     // Run every 5 minutes - Checkout Reminder & Overtime Prompt
     cron.schedule('*/5 * * * *', async () => {
-        console.log('[Scheduler] Running Attendance Checks...');
+        console.log('[Scheduler] Running Attendance Checks (Smart Shift)...');
         try {
             const now = new Date();
-            const currentHour = now.getHours();
-            const currentMinute = now.getMinutes();
+            // Start/End day in UTC/Server time for query consistency
+            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+            const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
 
-            const startOfDay = new Date(now.setHours(0, 0, 0, 0));
-            const endOfDay = new Date(now.setHours(23, 59, 59, 999));
+            // Import necessary models locally if needed or rely on top imports
+            const { Shift } = require('../models/Shift'); // Ensure these are loaded
 
-            // Import Shift/Branch model locally to avoid circular deps if any, 
-            // though standard import is fine.
-            const { Shift } = require('../models/Shift');
-            const { Branch } = require('../models/Branch');
-
+            // Get all active users
             const users = await User.findAll({
                 where: {
-                    role: {
-                        [Op.notIn]: [UserRole.OWNER]
-                    }
-                },
-                include: [{
-                    model: Shift,
-                    required: false
-                }, {
-                    model: Branch,
-                    required: false
-                }]
+                    role: { [Op.notIn]: [UserRole.OWNER] }
+                }
             });
 
+            // Fetch ALL Shifts once to optimize
+            const allShifts = await Shift.findAll();
+
             for (const user of users) {
-                // Determine user shift end time
-                // Fallback to branch setting if shift is missing, or default 17:00
-                const endHourStr = user.Shift?.endHour || user.Branch?.endHour || '17:00';
+                // 1. Get Today's Check-In
+                const checkInRecord = await Attendance.findOne({
+                    where: {
+                        userId: user.id,
+                        type: AttendanceType.CHECK_IN,
+                        timestamp: { [Op.between]: [startOfDay, endOfDay] }
+                    }
+                });
 
-                const [endHour, endMinute] = endHourStr.split(':').map(Number);
+                // If user hasn't checked in, we cannot determine their dynamic shift, so skip reminders
+                if (!checkInRecord) continue;
 
-                const shiftEndMinutes = endHour * 60 + endMinute;
-                const currentMinutes = currentHour * 60 + currentMinute;
-                const timeDiff = currentMinutes - shiftEndMinutes;
+                // 2. Detect Shift based on Check-In Time (Smart Shift Logic)
+                // Assuming timestamp is in UTC, we convert to Jakarta to match shift hours like 08:00
+                const checkInTime = new Date(checkInRecord.timestamp);
+                const checkInWIBString = checkInTime.toLocaleTimeString('en-US', { timeZone: 'Asia/Jakarta', hour12: false, hour: '2-digit', minute: '2-digit' });
+                const [ciHour, ciMinute] = checkInWIBString.split(':').map(Number);
+                const ciTotalMinutes = ciHour * 60 + ciMinute;
 
-                // 1. CHECKOUT REMINDER (Waktunya Pulang)
-                // Window: 0 to 5 minutes after shift ends (Exact Time)
-                if (timeDiff >= 0 && timeDiff <= 5) {
-                    const checkCheckOut = await Attendance.findOne({
-                        where: { userId: user.id, type: AttendanceType.CHECK_OUT, timestamp: { [Op.between]: [startOfDay, endOfDay] } }
-                    });
+                let targetShift: any = null;
+                let minDiff = Infinity;
 
-                    const checkCheckIn = await Attendance.findOne({
-                        where: { userId: user.id, type: AttendanceType.CHECK_IN, timestamp: { [Op.between]: [startOfDay, endOfDay] } }
-                    });
+                for (const s of allShifts) {
+                    const [sHour, sMinute] = s.startHour.split(':').map(Number);
+                    const shiftStartMinutes = sHour * 60 + sMinute;
+                    const diff = Math.abs(ciTotalMinutes - shiftStartMinutes);
 
-                    // If working (Checked In, Not Checked Out)
-                    if (checkCheckIn && !checkCheckOut) {
-                        await sendPushNotification(
-                            [user.id],
-                            'Sudah Waktunya Pulang!',
-                            `Jam kerja Anda sudah berakhir (${endHourStr}). Silakan Check-out sekarang.`,
-                            { type: 'CHECKOUT_REMINDER' }
-                        );
-                        console.log(`[Scheduler] Sent Checkout Reminder to ${user.name}`);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        targetShift = s;
                     }
                 }
 
-                // 2. OVERTIME PROMPT (3 Hours Overtime)
-                // Window: 180 to 185 minutes (3 hours after = 180 mins)
-                const threeHoursInMinutes = 180;
-                if (timeDiff >= threeHoursInMinutes && timeDiff <= (threeHoursInMinutes + 5)) {
-                    const checkCheckOut = await Attendance.findOne({
-                        where: { userId: user.id, type: AttendanceType.CHECK_OUT, timestamp: { [Op.between]: [startOfDay, endOfDay] } }
-                    });
-                    const checkCheckIn = await Attendance.findOne({
-                        where: { userId: user.id, type: AttendanceType.CHECK_IN, timestamp: { [Op.between]: [startOfDay, endOfDay] } }
-                    });
+                // Default if no shift found
+                if (!targetShift) continue;
 
-                    // If STILL working 3 hours after shift
-                    if (checkCheckIn && !checkCheckOut) {
+                // 3. Determine Shift End Time from Dynamic Shift
+                const endHourStr = targetShift.endHour;
+                const [endH, endM] = endHourStr.split(':').map(Number);
+                const shiftEndMinutes = endH * 60 + endM;
+
+                // Calculate Current Time in WIB
+                const nowWIBString = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Jakarta', hour12: false, hour: '2-digit', minute: '2-digit' });
+                const [currH, currM] = nowWIBString.split(':').map(Number);
+                const currentTotalMinutes = currH * 60 + currM;
+
+                const timeDiff = currentTotalMinutes - shiftEndMinutes;
+
+                // Check if already checked out
+                const checkOutRecord = await Attendance.findOne({
+                    where: {
+                        userId: user.id,
+                        type: AttendanceType.CHECK_OUT,
+                        timestamp: { [Op.between]: [startOfDay, endOfDay] }
+                    }
+                });
+
+                // Only proceed if NOT checked out
+                if (!checkOutRecord) {
+                    // A. CHECKOUT REMINDER: 0 to 5 minutes after shift ends
+                    // Example: Ends 17:00. Now 17:02. Diff = 2.
+                    if (timeDiff >= 0 && timeDiff <= 5) {
                         await sendPushNotification(
                             [user.id],
-                            'Apakah Anda Lembur?',
-                            `Anda belum absen pulang 3 jam setelah jadwal. Buka aplikasi untuk konfirmasi lembur.`,
+                            'Waktunya Pulang! 🏠',
+                            `Shift ${targetShift.name} Anda berakhir (${endHourStr}). Jangan lupa Check-out ya!`,
+                            { type: 'CHECKOUT_REMINDER', shift: targetShift.name }
+                        );
+                        console.log(`[Scheduler] Sent Checkout Reminder to ${user.name} (Shift: ${targetShift.name})`);
+                    }
+
+                    // B. OVERTIME PROMPT: 180 to 185 minutes (~3 hours) after shift ends
+                    // Logic: > 3 hours late = Potential Overtime claim
+                    const threeHours = 180;
+                    if (timeDiff >= threeHours && timeDiff <= (threeHours + 5)) {
+                        await sendPushNotification(
+                            [user.id],
+                            'Lembur? ⏳',
+                            `Anda belum check-out 3 jam setelah jam pulang. Klik untuk klaim lembur jika masih bekerja.`,
                             { type: 'OVERTIME_PROMPT' }
                         );
-                        console.log(`[Scheduler] Sent Overtime Prompt to ${user.name}`);
+                        console.log(`[Scheduler] Sent Overtime Prompt to ${user.name} (Shift: ${targetShift.name})`);
                     }
                 }
             }
