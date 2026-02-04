@@ -9,7 +9,7 @@ import { API_CONFIG } from '../config/api';
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
         shouldPlaySound: true,
-        shouldSetBadge: false,
+        shouldSetBadge: true,
         shouldShowBanner: true,
         shouldShowList: true,
     }),
@@ -29,6 +29,8 @@ export const usePushNotifications = () => {
                 importance: Notifications.AndroidImportance.MAX,
                 vibrationPattern: [0, 250, 250, 250],
                 lightColor: '#FF231F7C',
+                lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+                bypassDnd: true,
             });
         }
 
