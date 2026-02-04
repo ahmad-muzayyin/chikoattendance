@@ -25,8 +25,8 @@ export const usePushNotifications = () => {
     async function registerForPushNotificationsAsync() {
         let token;
         if (Platform.OS === 'android') {
-            await Notifications.setNotificationChannelAsync('default', {
-                name: 'default',
+            await Notifications.setNotificationChannelAsync('chiko-notifications', {
+                name: 'Chiko Notifications',
                 importance: Notifications.AndroidImportance.MAX,
                 vibrationPattern: [0, 250, 250, 250],
                 lightColor: '#FF231F7C',

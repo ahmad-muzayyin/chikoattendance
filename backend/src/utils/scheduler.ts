@@ -1,4 +1,3 @@
-
 import cron from 'node-cron';
 import { User, UserRole } from '../models/User';
 import { Attendance, AttendanceType } from '../models/Attendance';
@@ -9,7 +8,7 @@ import { sendPushNotification } from './notifications';
 export const initScheduler = () => {
     console.log('[Scheduler] Initialized:');
     console.log('  - Alpha checker: 23:55 daily');
-    console.log('  - Checkout reminder: Every 30 min (shift-based)');
+    console.log('  - Attendance Checks (Checkout/Overtime): Every 5 min');
 
     // Run every day at 23:55 (11:55 PM)
     cron.schedule('55 23 * * *', async () => {
@@ -19,8 +18,7 @@ export const initScheduler = () => {
             const startOfDay = new Date(now.setHours(0, 0, 0, 0));
             const endOfDay = new Date(now.setHours(23, 59, 59, 999));
 
-            // 1. Get All Active Employees (Exclude OWNER, maybe SUPERVISOR?)
-            // Assuming supervisors also need to absent.
+            // 1. Get All Active Employees (Exclude OWNER)
             const users = await User.findAll({
                 where: {
                     role: {
@@ -122,22 +120,22 @@ export const initScheduler = () => {
         }
     });
 
-    // Run every 30 minutes - Checkout Reminder (Dynamic based on Shift)
-    cron.schedule('*/30 * * * *', async () => {
-        console.log('[Scheduler] Running Checkout Reminder Check...');
+    // Run every 5 minutes - Checkout Reminder & Overtime Prompt
+    cron.schedule('*/5 * * * *', async () => {
+        console.log('[Scheduler] Running Attendance Checks...');
         try {
             const now = new Date();
             const currentHour = now.getHours();
             const currentMinute = now.getMinutes();
-            const currentTime = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
 
             const startOfDay = new Date(now.setHours(0, 0, 0, 0));
             const endOfDay = new Date(now.setHours(23, 59, 59, 999));
 
-            // Import Shift model
+            // Import Shift/Branch model locally to avoid circular deps if any, 
+            // though standard import is fine.
             const { Shift } = require('../models/Shift');
+            const { Branch } = require('../models/Branch');
 
-            // Get all active employees (exclude OWNER) with their shift info
             const users = await User.findAll({
                 where: {
                     role: {
@@ -146,68 +144,72 @@ export const initScheduler = () => {
                 },
                 include: [{
                     model: Shift,
-                    required: false // LEFT JOIN - include users without shift too
+                    required: false
+                }, {
+                    model: Branch,
+                    required: false
                 }]
             });
 
             for (const user of users) {
-                // Skip if user doesn't have a shift
-                if (!user.Shift || !user.Shift.endHour) {
-                    continue;
-                }
+                // Determine user shift end time
+                // Fallback to branch setting if shift is missing, or default 17:00
+                const endHourStr = user.Shift?.endHour || user.Branch?.endHour || '17:00';
 
-                // Parse shift end time
-                const [endHour, endMinute] = user.Shift.endHour.split(':').map(Number);
+                const [endHour, endMinute] = endHourStr.split(':').map(Number);
 
-                // Calculate if current time is within reminder window
-                // Reminder window: shift end time ± 30 minutes
                 const shiftEndMinutes = endHour * 60 + endMinute;
                 const currentMinutes = currentHour * 60 + currentMinute;
                 const timeDiff = currentMinutes - shiftEndMinutes;
 
-                // Only send if we're within -30 to +30 minutes of shift end
-                // AND we haven't sent a reminder in the last hour (to avoid spam)
-                if (timeDiff >= -30 && timeDiff <= 30) {
-                    // Check if user has checked in today
-                    const checkInToday = await Attendance.findOne({
-                        where: {
-                            userId: user.id,
-                            type: AttendanceType.CHECK_IN,
-                            timestamp: {
-                                [Op.between]: [startOfDay, endOfDay]
-                            }
-                        }
+                // 1. CHECKOUT REMINDER (Waktunya Pulang)
+                // Window: 0 to 5 minutes after shift ends (Exact Time)
+                if (timeDiff >= 0 && timeDiff <= 5) {
+                    const checkCheckOut = await Attendance.findOne({
+                        where: { userId: user.id, type: AttendanceType.CHECK_OUT, timestamp: { [Op.between]: [startOfDay, endOfDay] } }
                     });
 
-                    // Check if user has already checked out
-                    const checkOutToday = await Attendance.findOne({
-                        where: {
-                            userId: user.id,
-                            type: AttendanceType.CHECK_OUT,
-                            timestamp: {
-                                [Op.between]: [startOfDay, endOfDay]
-                            }
-                        }
+                    const checkCheckIn = await Attendance.findOne({
+                        where: { userId: user.id, type: AttendanceType.CHECK_IN, timestamp: { [Op.between]: [startOfDay, endOfDay] } }
                     });
 
-                    // If checked in but not checked out, send reminder
-                    if (checkInToday && !checkOutToday) {
-                        console.log(`[Scheduler] Checkout reminder for ${user.name} (Shift ends: ${user.Shift.endHour})`);
-
-                        // Send Push Notification
+                    // If working (Checked In, Not Checked Out)
+                    if (checkCheckIn && !checkCheckOut) {
                         await sendPushNotification(
                             [user.id],
-                            '⏰ Waktunya Absen Pulang!',
-                            `Shift Anda (${user.Shift.name}) akan selesai. Jangan lupa absen pulang!`,
-                            { type: 'CHECKOUT_REMINDER', shiftEndTime: user.Shift.endHour }
+                            'Sudah Waktunya Pulang!',
+                            `Jam kerja Anda sudah berakhir (${endHourStr}). Silakan Check-out sekarang.`,
+                            { type: 'CHECKOUT_REMINDER' }
                         );
+                        console.log(`[Scheduler] Sent Checkout Reminder to ${user.name}`);
+                    }
+                }
+
+                // 2. OVERTIME PROMPT (3 Hours Overtime)
+                // Window: 180 to 185 minutes (3 hours after = 180 mins)
+                const threeHoursInMinutes = 180;
+                if (timeDiff >= threeHoursInMinutes && timeDiff <= (threeHoursInMinutes + 5)) {
+                    const checkCheckOut = await Attendance.findOne({
+                        where: { userId: user.id, type: AttendanceType.CHECK_OUT, timestamp: { [Op.between]: [startOfDay, endOfDay] } }
+                    });
+                    const checkCheckIn = await Attendance.findOne({
+                        where: { userId: user.id, type: AttendanceType.CHECK_IN, timestamp: { [Op.between]: [startOfDay, endOfDay] } }
+                    });
+
+                    // If STILL working 3 hours after shift
+                    if (checkCheckIn && !checkCheckOut) {
+                        await sendPushNotification(
+                            [user.id],
+                            'Apakah Anda Lembur?',
+                            `Anda belum absen pulang 3 jam setelah jadwal. Buka aplikasi untuk konfirmasi lembur.`,
+                            { type: 'OVERTIME_PROMPT' }
+                        );
+                        console.log(`[Scheduler] Sent Overtime Prompt to ${user.name}`);
                     }
                 }
             }
-            console.log('[Scheduler] Checkout Reminder Check Completed.');
-
         } catch (error) {
-            console.error('[Scheduler] Error in Checkout Reminder:', error);
+            console.error('[Scheduler] Error in Attendance Checks:', error);
         }
     });
 };

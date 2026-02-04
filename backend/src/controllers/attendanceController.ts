@@ -24,12 +24,12 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: 'Invalid coordinates provided' });
         }
 
-        const user = await User.findByPk(userId, { include: [Branch, Shift] });
+        // Fetch User and Branch (exclude user.Shift, we will detect it dynamically)
+        const user = await User.findByPk(userId, { include: [Branch] });
 
         // Use strict type casting or check
         const userRole = user?.role as UserRole;
         const branch = user?.Branch as Branch | null;
-        const shift = user?.Shift as Shift | null;
 
         let visitedBranchName = '';
 
@@ -111,31 +111,56 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: 'Anda sudah melakukan Check-in hari ini.' });
         }
 
-        // 3. Late Logic
+        // 3. Smart Shift Detection Logic & Late Calc
         const now = new Date();
         let isLate = false;
         let isHalfDay = false;
         let warningMessage = '';
+
+        // Get current time in minutes (WIB)
+        const nowWIBString = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Jakarta', hour12: false, hour: '2-digit', minute: '2-digit' });
+        const [currentHour, currentMinute] = nowWIBString.split(':').map(Number);
+        const currentTotalMinutes = currentHour * 60 + currentMinute;
+
+        // Fetch ALL Shifts to compare
+        const allShifts = await Shift.findAll();
+
+        let targetShift = null;
+        let minDiff = Infinity;
+
+        // Find the closest shift start time
+        for (const s of allShifts) {
+            const [sHour, sMinute] = s.startHour.split(':').map(Number);
+            const shiftStartMinutes = sHour * 60 + sMinute;
+
+            // Calculate absolute difference
+            let diff = Math.abs(currentTotalMinutes - shiftStartMinutes);
+
+            if (diff < minDiff) {
+                minDiff = diff;
+                targetShift = s;
+            }
+        }
+
+        // Default or Fallback if no shifts
+        const detectedShiftName = targetShift ? targetShift.name : 'Unknown';
+        const startHourStr = targetShift ? targetShift.startHour : (branch?.startHour || '09:00');
+
+        console.log(`[SmartShift] User ${user.name} detected on shift: ${detectedShiftName} (${startHourStr}) at ${nowWIBString}`);
 
         // KEPALA TOKO (HEAD): Flexible time, never late
         if (userRole === UserRole.HEAD) {
             isLate = false;
         } else {
             // Determine shift start time in WIB context
-            const startHourStr = shift?.startHour || branch?.startHour || '09:00';
             const [startHour, startMinute] = startHourStr.split(':').map(Number);
-
-            // Get current time in WIB
-            const nowWIBString = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Jakarta', hour12: false, hour: '2-digit', minute: '2-digit' });
-            const [currentHour, currentMinute] = nowWIBString.split(':').map(Number);
-
-            const currentTotalMinutes = currentHour * 60 + currentMinute;
             const shiftStartTotalMinutes = startHour * 60 + startMinute;
 
-            // Check if late (compare minutes)
-            if (currentTotalMinutes > shiftStartTotalMinutes) {
+            // Check if late (compare minutes) with 10 mins tolerance
+            const tolerance = 10;
+
+            if (currentTotalMinutes > (shiftStartTotalMinutes + tolerance)) {
                 isLate = true;
-                // Calculate late duration in minutes
                 const lateDurationMinutes = currentTotalMinutes - shiftStartTotalMinutes;
 
                 // If late > 60 mins (1 hour), mark as Half Day
@@ -144,12 +169,12 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
                 }
 
                 try {
-                    // Determine penalty
+                    // Determine penalty points
                     const penaltyPoints = 5;
                     await Punishment.create({
                         userId,
                         points: penaltyPoints,
-                        reason: `Terlambat ${Math.floor(lateDurationMinutes)} menit. Jadwal: ${branch?.startHour || '09:00'}`,
+                        reason: `Terlambat ${Math.floor(lateDurationMinutes)} menit. Shift: ${detectedShiftName} (${startHourStr})`,
                         date: now
                     });
 
@@ -168,13 +193,8 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
                         }
                     });
 
-                    // currentLateCount matches (lateCount before this insert) + 1? 
-                    // We create attendance AFTER this block. So lateCount is N. This will be N+1.
-                    // Requirement: "jika lebih dari 5 hari maka akan ada tulisan... pengurangan gaji 50K"
-                    // So if (lateCount + 1) > 5.
                     if (lateCount + 1 > 5) {
                         warningMessage = `PERINGATAN: Anda terlambat > 5 kali bulan ini (${lateCount + 1}x). Gaji dipotong Rp 50.000.`;
-                        // Log for "Notification to Kepala Toko"
                         console.log(`[NOTIF CAFE] KARYAWAN ${user.name} SUDAH TELAT ${lateCount + 1} KALI.`);
                     }
 
@@ -195,7 +215,7 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
             isLate,
             isOvertime: false,
             isHalfDay,
-            notes: notes || (visitedBranchName ? `Visit: ${visitedBranchName}` : '') || (isLate ? 'Terlambat' : ''),
+            notes: notes || (visitedBranchName ? `Visit: ${visitedBranchName}` : '') || (isLate ? `Telat (${detectedShiftName})` : `Hadir (${detectedShiftName})`),
             photoUrl
         });
 
@@ -204,11 +224,11 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
             action: 'CHECK_IN',
             performedBy: userId,
             targetId: attendance.id.toString(),
-            details: `Check-in success. Late: ${isLate}`
+            details: `Check-in success. Shift: ${detectedShiftName}. Late: ${isLate}`
         }).catch(err => console.error('Audit log failed:', err));
 
         res.status(201).json({
-            message: 'Check-in Berhasil',
+            message: `Check-in Berhasil (Shift: ${detectedShiftName})`,
             data: attendance,
             isLate,
             punishmentPoints: isLate ? 5 : 0,
@@ -227,16 +247,15 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
 
 export const checkOut = async (req: AuthRequest, res: Response) => {
     try {
-        const { latitude, longitude, deviceId } = req.body;
+        const { latitude, longitude, deviceId, isOvertime: isOvertimeClaimed, notes } = req.body;
         const userId = req.user?.id;
 
         if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
-        const user = await User.findByPk(userId, { include: [Branch, Shift] });
+        const user = await User.findByPk(userId, { include: [Branch] });
         if (!user) return res.status(404).json({ message: 'User not found' });
 
         const branch = user.Branch as Branch | null;
-        const shift = user.Shift as Shift | null;
         const now = new Date();
         let isOvertime = false;
 
@@ -336,55 +355,60 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: 'Anda belum melakukan Absensi Masuk hari ini.' });
         }
 
+        // --- SMART SHIFT DETECTION FOR OVERTIME ---
+        // Instead of user.Shift, we identify which shift matched the CheckIn time
+        const checkInTime = new Date(existingCheckIn.timestamp);
+        const checkInWIBString = checkInTime.toLocaleTimeString('en-US', { timeZone: 'Asia/Jakarta', hour12: false, hour: '2-digit', minute: '2-digit' });
+        const [ciHour, ciMinute] = checkInWIBString.split(':').map(Number);
+        const ciTotalMinutes = ciHour * 60 + ciMinute;
+
+        // Fetch All Shifts
+        const allShifts = await Shift.findAll();
+        let targetShift = null;
+        let minDiff = Infinity;
+
+        // Find shift start that is closest to Checked In Time
+        for (const s of allShifts) {
+            const [sHour, sMinute] = s.startHour.split(':').map(Number);
+            const shiftStartMinutes = sHour * 60 + sMinute;
+
+            // Calculate absolute difference
+            let diff = Math.abs(ciTotalMinutes - shiftStartMinutes);
+
+            if (diff < minDiff) {
+                minDiff = diff;
+                targetShift = s;
+            }
+        }
+
+        const detectedShiftName = targetShift ? targetShift.name : 'Unknown';
+        const endHourStr = targetShift ? targetShift.endHour : (branch?.endHour || '17:00');
+        console.log(`[SmartShift] Checkout for ${user.name}. Matched Shift: ${detectedShiftName} (Ends ${endHourStr})`);
+
+        // --- OVERTIME LOGIC ---
+        // Get current time in WIB
+        const nowWIBString = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Jakarta', hour12: false, hour: '2-digit', minute: '2-digit' });
+        const [currentHour, currentMinute] = nowWIBString.split(':').map(Number);
+
+        const currentTotalMinutes = currentHour * 60 + currentMinute;
+        const [endH, endM] = endHourStr.split(':').map(Number);
+        const shiftEndTotalMinutes = endH * 60 + endM;
+
         // KEPALA TOKO (HEAD): Overtime if worked > 8 hours
         if (user.role === UserRole.HEAD) {
-            // Find today's Check-In
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
+            const checkInTimeMs = new Date(existingCheckIn.timestamp).getTime();
+            const checkOutTimeMs = now.getTime();
+            const durationHours = (checkOutTimeMs - checkInTimeMs) / (1000 * 60 * 60);
 
-            const checkInRecord = await Attendance.findOne({
-                where: {
-                    userId,
-                    type: AttendanceType.CHECK_IN,
-                    timestamp: {
-                        [Op.gte]: today,
-                        [Op.lt]: tomorrow
-                    }
-                }
-            });
-
-            if (checkInRecord) {
-                const checkInTime = new Date(checkInRecord.timestamp).getTime();
-                const checkOutTime = now.getTime();
-                const durationHours = (checkOutTime - checkInTime) / (1000 * 60 * 60);
-
-                // If duration > 8 hours, it is overtime
-                if (durationHours > 8) {
-                    isOvertime = true;
-                }
+            if (durationHours > 8) {
+                isOvertime = true;
             }
-        } else {
-            // STAFF/OTHERS: Overtime if checkout > 3 hours after shift end
-            // Determine shift end time in WIB
-            const endHourStr = shift?.endHour || branch?.endHour || '17:00';
-            const [endHour, endMinute] = endHourStr.split(':').map(Number);
-
-            // Get current time in WIB
-            const nowWIBString = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Jakarta', hour12: false, hour: '2-digit', minute: '2-digit' });
-            const [currentHour, currentMinute] = nowWIBString.split(':').map(Number);
-
-            const currentTotalMinutes = currentHour * 60 + currentMinute;
-            let shiftEndTotalMinutes = endHour * 60 + endMinute;
-
-            // Handle shift crossing midnight (e.g. ends 02:00) -> logic complex, assuming day shift for now
-            // If current < shiftEnd, maybe next day? Ignoring for simple MVP.
-
-            // Logic: "melebihi 3 jam dari jam pulang maka itu terhitung lembur"
+        }
+        else {
+            // STAFF: Overtime only if check-out > 3 hours AFTER detected shift end time
             const diffMinutes = currentTotalMinutes - shiftEndTotalMinutes;
 
-            if (diffMinutes > 180) {
+            if (diffMinutes > 180) { // 3 hours
                 isOvertime = true;
             }
         }
@@ -399,7 +423,7 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
             isLate: false,
             isOvertime,
             isHalfDay: false,
-            notes: isOvertime ? 'Lembur' : ''
+            notes: notes || (isOvertime ? `Lembur (${detectedShiftName})` : `Pulang (${detectedShiftName})`)
         });
 
         res.status(201).json({

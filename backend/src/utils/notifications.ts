@@ -29,6 +29,8 @@ export const sendPushNotification = async (userIds: number[], title: string, bod
                     title,
                     body,
                     data,
+                    priority: 'high',
+                    channelId: 'chiko-notifications',
                 });
             }
         }

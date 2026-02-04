@@ -59,6 +59,10 @@ export default function AttendanceInputScreen() {
     const [todayCheckIn, setTodayCheckIn] = useState<Date | null>(null);
     const [activeEvent, setActiveEvent] = useState<any>(null);
 
+    const [userShift, setUserShift] = useState<{ endHour: string } | null>(null);
+
+    const [userShift, setUserShift] = useState<{ endHour: string } | null>(null);
+
     // Initial Data Fetch
     useEffect(() => {
         (async () => {
@@ -69,13 +73,12 @@ export default function AttendanceInputScreen() {
                 setStatusMessage('Izin lokasi diperlukan.');
             }
 
-            // Fetch Today's Attendance State
-            fetchTodayAttendance();
+            // Fetch Today's Attendance State & Shift Info
+            fetchUserDataAndAttendance();
         })();
 
         // Fetch Branches for detection
         const fetchBranches = async () => {
-            // ... (existing code)
             try {
                 const token = await SecureStore.getItemAsync('authToken');
                 if (!token) return;
@@ -111,11 +114,28 @@ export default function AttendanceInputScreen() {
         fetchTodayEvent();
     }, []);
 
-    const fetchTodayAttendance = async () => {
+    const fetchUserDataAndAttendance = async () => {
         try {
             const token = await SecureStore.getItemAsync('authToken');
-            // Fetch calendar/history to find today's record
-            // Using endpoint that returns list of attendance
+
+            // 1. Fetch User Profile for Shift
+            // Using endpoint that returns full user info or refresh from auth
+            // Assuming /auth/me or similar exists, or use stored user data if sufficient.
+            // But we need Shift details which might not be in initial login storage.
+            // Let's assume we can hit /profile or /auth/me
+            try {
+                const userRes = await axios.get(`${API_CONFIG.BASE_URL}/auth/me`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (userRes.data && userRes.data.user) {
+                    const user = userRes.data.user;
+                    const shiftEnd = user.shift?.endHour || user.branch?.endHour || '17:00';
+                    setUserShift({ endHour: shiftEnd });
+                }
+            } catch (e) { console.log('Failed to refresh user data'); }
+
+
+            // 2. Fetch Attendance
             const { data } = await axios.get(
                 `${API_CONFIG.BASE_URL}${ENDPOINTS.CALENDAR}?deviceId=MOBILE_APP`,
                 { headers: { Authorization: `Bearer ${token}` } }
@@ -126,10 +146,6 @@ export default function AttendanceInputScreen() {
             const todayRecord = data.find((r: any) => r.date === todayStr);
 
             if (todayRecord && todayRecord.checkInTime) {
-                // Parse checkInTime (assuming format "HH:mm" or full ISO)
-                // If the API returns full ISO string, great. If "HH:mm", we need to combine with date.
-                // Based on previous file views, it seems to be time string "08:00".
-                // Let's try to parse carefully.
                 let checkIn = new Date();
                 if (todayRecord.checkInTime.includes('T')) {
                     checkIn = new Date(todayRecord.checkInTime);
@@ -209,6 +225,9 @@ export default function AttendanceInputScreen() {
         }
     };
 
+    const [overtimeReason, setOvertimeReason] = useState('');
+    const [showOvertimeDialog, setShowOvertimeDialog] = useState(false);
+
     const handleSubmit = async (type: 'CHECK_IN' | 'CHECK_OUT') => {
         if (!location) {
             setResultModal({ visible: true, type: 'error', message: 'Lokasi belum ditemukan. Mohon tunggu sejenak atau pastikan GPS aktif.' });
@@ -217,61 +236,23 @@ export default function AttendanceInputScreen() {
 
         // Logic Lembur untuk Check Out
         if (type === 'CHECK_OUT') {
-            // Check Lock
-            const lockUntil = await SecureStore.getItemAsync('OVERTIME_LOCK_UNTIL');
-            if (lockUntil) {
-                const lockDate = new Date(parseInt(lockUntil));
-                if (new Date() < lockDate) {
-                    const diffMinutes = Math.ceil((lockDate.getTime() - new Date().getTime()) / 60000);
-                    const hours = Math.floor(diffMinutes / 60);
-                    const mins = diffMinutes % 60;
-
-                    setResultModal({
-                        visible: true,
-                        type: 'info',
-                        message: `Anda sedang dalam mode lembur.\n\nAbsensi pulang baru dapat dilakukan ${hours > 0 ? `${hours} jam ` : ''}${mins} menit lagi.`
-                    });
-                    return;
-                } else {
-                    // Lock expired, clean up
-                    await SecureStore.deleteItemAsync('OVERTIME_LOCK_UNTIL');
-                }
-            }
-
-            // Check Duration > 8 Hours for Overtime Prompt
-            // "kepala toko" specific or general, applying logic as requested
-            // Assuming 8 hours standard
-            if (todayCheckIn) {
+            // User Feedback: "jika waktunya pulang tidak melakukan absensi + 3 jam maka ada notifikasi pertanyaan..."
+            // Check if current time > shiftEnd + 3 hours
+            if (userShift && userShift.endHour) {
                 const now = new Date();
-                const diffMs = now.getTime() - todayCheckIn.getTime();
+                const [endH, endM] = userShift.endHour.split(':').map(Number);
+
+                // Construct Shift End Date for Today
+                const shiftEndDate = new Date();
+                shiftEndDate.setHours(endH, endM, 0, 0);
+
+                const diffMs = now.getTime() - shiftEndDate.getTime();
                 const diffHours = diffMs / (1000 * 60 * 60);
 
-                if (diffHours >= 8) {
-                    Alert.alert(
-                        "Konfirmasi Lembur",
-                        "Apakah anda sedang mengerjakan lembur?",
-                        [
-                            {
-                                text: "Tidak",
-                                onPress: () => processCheckout() // Proceed normal checkout
-                            },
-                            {
-                                text: "Ya, Saya Lembur",
-                                onPress: async () => {
-                                    // Lock for 3 hours
-                                    const lockTime = new Date().getTime() + (3 * 60 * 60 * 1000);
-                                    await SecureStore.setItemAsync('OVERTIME_LOCK_UNTIL', lockTime.toString());
-
-                                    Alert.alert(
-                                        "Mode Lembur Diaktifkan",
-                                        "Absensi pulang Anda otomatis tertunda selama 3 jam dari sekarang. Silakan lanjutkan pekerjaan Anda."
-                                    );
-                                    // Do NOT proceed to checkout
-                                }
-                            }
-                        ]
-                    );
-                    return; // Stop here, wait for user choice
+                // If more than 3 hours late from SHIFT END (and not just duration working)
+                if (diffHours >= 3) {
+                    setShowOvertimeDialog(true);
+                    return;
                 }
             }
         }
@@ -284,116 +265,118 @@ export default function AttendanceInputScreen() {
         processCheckout(type);
     };
 
-    const processCheckout = async (type: 'CHECK_IN' | 'CHECK_OUT' = 'CHECK_OUT') => {
+    const processCheckout = async (type: 'CHECK_IN' | 'CHECK_OUT' = 'CHECK_OUT', isOvertime = false, overtimeNotes = '') => {
         // Confirmation Dialog
-        Alert.alert(
-            `Konfirmasi ${type === 'CHECK_IN' ? 'Check-In' : 'Check-Out'}`,
-            `Anda akan melakukan absensi ${type === 'CHECK_IN' ? 'MASUK' : 'PULANG'}.\n\nPastikan data sudah benar karena tidak dapat diubah (Hanya 1x sehari).`,
-            [
-                { text: 'Batal', style: 'cancel' },
-                {
-                    text: 'Ya, Kirim',
-                    onPress: async () => {
-                        setLoading(true);
-                        try {
-                            const token = await SecureStore.getItemAsync('authToken');
-                            const endpoint = type === 'CHECK_IN' ? ENDPOINTS.CHECK_IN : ENDPOINTS.CHECK_OUT;
+        const finalNotes = overtimeNotes ? `${notes} (Lembur: ${overtimeNotes})` : notes;
 
-                            const res = await axios.post(
-                                `${API_CONFIG.BASE_URL}${endpoint}`,
-                                {
-                                    latitude: location?.coords.latitude,
-                                    longitude: location?.coords.longitude,
-                                    deviceId: 'MOBILE_APP',
-                                    photoUrl: photo,
-                                    notes: notes
-                                },
-                                { headers: { Authorization: `Bearer ${token}` } }
-                            );
+        const execute = async () => {
+            setLoading(true);
+            try {
+                const token = await SecureStore.getItemAsync('authToken');
+                const endpoint = type === 'CHECK_IN' ? ENDPOINTS.CHECK_IN : ENDPOINTS.CHECK_OUT;
 
-                            // Personalised Success Messages
-                            let successTitle = type === 'CHECK_IN' ? 'Absensi Masuk Berhasil' : 'Absensi Pulang Berhasil';
-                            let successMsg = type === 'CHECK_IN'
-                                ? 'Selamat bekerja! Semangat untuk hari ini.'
-                                : 'Terima kasih atas kerja kerasmu hari ini. Hati-hati di jalan!';
+                const res = await axios.post(
+                    `${API_CONFIG.BASE_URL}${endpoint}`,
+                    {
+                        latitude: location?.coords.latitude,
+                        longitude: location?.coords.longitude,
+                        deviceId: 'MOBILE_APP',
+                        photoUrl: photo,
+                        notes: finalNotes,
+                        isOvertime
+                    },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
 
-                            // If Success Check In, update local state
-                            if (type === 'CHECK_IN') {
-                                setTodayCheckIn(new Date());
-                            }
-                            // If Success Check Out, clear any locks
-                            if (type === 'CHECK_OUT') {
-                                SecureStore.deleteItemAsync('OVERTIME_LOCK_UNTIL');
-                            }
+                // Personalised Success Messages
+                let successTitle = type === 'CHECK_IN' ? 'Absensi Masuk Berhasil' : 'Absensi Pulang Berhasil';
+                let successMsg = type === 'CHECK_IN'
+                    ? 'Selamat bekerja! Semangat untuk hari ini.'
+                    : 'Terima kasih atas kerja kerasmu hari ini. Hati-hati di jalan!';
 
-                            setResultModal({
-                                visible: true,
-                                type: 'success',
-                                message: successMsg,
-                                data: res.data
-                            });
+                // If Success Check In, update local state
+                if (type === 'CHECK_IN') {
+                    setTodayCheckIn(new Date());
+                }
 
-                        } catch (error: any) {
-                            const resData = error?.response?.data;
-                            const status = error?.response?.status;
-                            let title = 'Gagal Absen';
-                            let msg = resData?.message || 'Terjadi kesalahan sistem. Mohon coba lagi.';
+                setResultModal({
+                    visible: true,
+                    type: 'success',
+                    message: successMsg,
+                    data: res.data
+                });
 
-                            // NETWORK / SERVER DOWN
-                            if (!error.response) {
-                                msg = 'Gagal terhubung ke server. Periksa koneksi internet Anda.';
-                            }
-                            // 400 - BAD REQUEST (Logika Bisnis)
-                            else if (status === 400) {
-                                const lowerMsg = msg.toLowerCase();
+            } catch (error: any) {
+                const resData = error?.response?.data;
+                const status = error?.response?.status;
+                let title = 'Gagal Absen';
+                let msg = resData?.message || 'Terjadi kesalahan sistem. Mohon coba lagi.';
 
-                                if (lowerMsg.includes('jangkauan') || lowerMsg.includes('radius') || lowerMsg.includes('too far')) {
-                                    setResultModal({
-                                        visible: true,
-                                        type: 'range',
-                                        message: 'Lokasi Anda Terlalu Jauh dari Outlet',
-                                        data: { distance: resData.distance, max: resData.maxRadius }
-                                    });
-                                    return;
-                                }
+                // NETWORK / SERVER DOWN
+                if (!error.response) {
+                    msg = 'Gagal terhubung ke server. Periksa koneksi internet Anda.';
+                }
+                // 400 - BAD REQUEST (Logika Bisnis)
+                else if (status === 400) {
+                    const lowerMsg = msg.toLowerCase();
 
-                                if (lowerMsg.includes('already') || lowerMsg.includes('sudah')) {
-                                    msg = type === 'CHECK_IN'
-                                        ? 'Anda sudah melakukan absensi MASUK hari ini.'
-                                        : 'Anda sudah melakukan absensi PULANG hari ini.';
-                                    title = 'Absensi Duplikat';
-                                } else if (lowerMsg.includes('shift') || lowerMsg.includes('schedule')) {
-                                    msg = 'Tidak ada jadwal shift yang aktif saat ini. Hubungi supervisor jika jadwal tidak sesuai.';
-                                    title = 'Diluar Jadwal';
-                                } else if (lowerMsg.includes('face') || lowerMsg.includes('wajah')) {
-                                    msg = 'Wajah tidak terdeteksi dengan jelas di foto. Mohon foto ulang di tempat terang.';
-                                    title = 'Wajah Tidak Terdeteksi';
-                                }
-                            }
-                            // 403 - FORBIDDEN
-                            else if (status === 403) {
-                                msg = 'Akun Anda tidak memiliki izin untuk melakukan absensi ini.';
-                                title = 'Akses Ditolak';
-                            }
-                            // 500 - SERVER ERROR
-                            else if (status >= 500) {
-                                msg = 'Server sedang sibuk atau mengalami gangguan. Mohon coba beberapa saat lagi.';
-                                title = 'Gangguan Server';
-                            }
+                    if (lowerMsg.includes('jangkauan') || lowerMsg.includes('radius') || lowerMsg.includes('too far')) {
+                        setResultModal({
+                            visible: true,
+                            type: 'range',
+                            message: 'Lokasi Anda Terlalu Jauh dari Outlet',
+                            data: { distance: resData.distance, max: resData.maxRadius }
+                        });
+                        return;
+                    }
 
-                            setResultModal({
-                                visible: true,
-                                type: 'error',
-                                message: `${title}\n\n${msg}`,
-                                data: null
-                            });
-                        } finally {
-                            setLoading(false);
-                        }
+                    if (lowerMsg.includes('already') || lowerMsg.includes('sudah')) {
+                        msg = type === 'CHECK_IN'
+                            ? 'Anda sudah melakukan absensi MASUK hari ini.'
+                            : 'Anda sudah melakukan absensi PULANG hari ini.';
+                        title = 'Absensi Duplikat';
+                    } else if (lowerMsg.includes('shift') || lowerMsg.includes('schedule')) {
+                        msg = 'Tidak ada jadwal shift yang aktif saat ini. Hubungi supervisor jika jadwal tidak sesuai.';
+                        title = 'Diluar Jadwal';
+                    } else if (lowerMsg.includes('face') || lowerMsg.includes('wajah')) {
+                        msg = 'Wajah tidak terdeteksi dengan jelas di foto. Mohon foto ulang di tempat terang.';
+                        title = 'Wajah Tidak Terdeteksi';
                     }
                 }
-            ]
-        );
+                // 403 - FORBIDDEN
+                else if (status === 403) {
+                    msg = 'Akun Anda tidak memiliki izin untuk melakukan absensi ini.';
+                    title = 'Akses Ditolak';
+                }
+                // 500 - SERVER ERROR
+                else if (status >= 500) {
+                    msg = 'Server sedang sibuk atau mengalami gangguan. Mohon coba beberapa saat lagi.';
+                    title = 'Gangguan Server';
+                }
+
+                setResultModal({
+                    visible: true,
+                    type: 'error',
+                    message: `${title}\n\n${msg}`,
+                    data: null
+                });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (isOvertime) {
+            execute();
+        } else {
+            Alert.alert(
+                `Konfirmasi ${type === 'CHECK_IN' ? 'Check-In' : 'Check-Out'}`,
+                `Anda akan melakukan absensi ${type === 'CHECK_IN' ? 'MASUK' : 'PULANG'}.\n\nPastikan data sudah benar karena tidak dapat diubah (Hanya 1x sehari).`,
+                [
+                    { text: 'Batal', style: 'cancel' },
+                    { text: 'Ya, Kirim', onPress: execute }
+                ]
+            );
+        }
     };
 
     if (!permission?.granted) {
@@ -603,6 +586,43 @@ export default function AttendanceInputScreen() {
 
             {/* Result Modal */}
             <Portal>
+                {/* Overtime Reason Dialog */}
+                <Dialog visible={showOvertimeDialog} onDismiss={() => setShowOvertimeDialog(false)}>
+                    <Dialog.Title>Sedang Lembur?</Dialog.Title>
+                    <Dialog.Content>
+                        <Text style={{ marginBottom: 10 }}>
+                            Sistem mendeteksi Anda pulang terlambat 3 jam dari jadwal.
+                        </Text>
+                        <Text style={{ fontWeight: 'bold' }}>
+                            Apakah Anda sedang mengerjakan Event/Lembur?
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#666', marginTop: 5, marginBottom: 10 }}>
+                            Jika TIDAK, silakan tekan tombol "Tidak, Hanya Pulang".
+                        </Text>
+
+                        <TextInput
+                            label="Alasan Lembur / Nama Event"
+                            value={overtimeReason}
+                            onChangeText={setOvertimeReason}
+                            mode="outlined"
+                        />
+                    </Dialog.Content>
+                    <Dialog.Actions>
+                        <Button onPress={() => {
+                            setShowOvertimeDialog(false);
+                            processCheckout('CHECK_OUT', false); // No overtime
+                        }}>Tidak, Hanya Pulang</Button>
+                        <Button onPress={() => {
+                            if (!overtimeReason) {
+                                Alert.alert("Wajib Diisi", "Mohon isi alasan lembur.");
+                                return;
+                            }
+                            setShowOvertimeDialog(false);
+                            processCheckout('CHECK_OUT', true, overtimeReason); // Overtime confirmed
+                        }}>Ya, Kirim Lembur</Button>
+                    </Dialog.Actions>
+                </Dialog>
+
                 <Modal
                     visible={resultModal.visible}
                     onDismiss={() => resultModal.type !== 'success' && setResultModal({ ...resultModal, visible: false })}
