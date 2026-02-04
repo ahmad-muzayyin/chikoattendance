@@ -61,8 +61,6 @@ export default function AttendanceInputScreen() {
 
     const [userShift, setUserShift] = useState<{ endHour: string } | null>(null);
 
-    const [userShift, setUserShift] = useState<{ endHour: string } | null>(null);
-
     // Initial Data Fetch
     useEffect(() => {
         (async () => {
