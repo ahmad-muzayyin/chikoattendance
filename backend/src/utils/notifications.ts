@@ -63,33 +63,55 @@ export const sendPushNotification = async (userIds: number[], title: string, bod
             }
         }
 
-        // B. Send FCM Messages (Direct)
+        // B. Send FCM Messages (Direct) - MAX PRIORITY TWEAK
         if (fcmTokens.length > 0) {
             if (isFirebaseInitialized) {
                 try {
                     // Normalize data to string values for FCM data payload
                     const fcmData = Object.keys(data).reduce((acc: any, key) => {
-                        acc[key] = String(data[key]);
+                        acc[key] = String(data[key]); // FCM data values must be strings
                         return acc;
                     }, {});
 
                     const message = {
-                        notification: { title, body },
+                        notification: {
+                            title,
+                            body,
+                        },
                         data: fcmData,
                         tokens: fcmTokens,
                         android: {
                             priority: 'high' as const,
+                            ttl: 3600 * 1000, // 1 hour time-to-live
                             notification: {
                                 sound: 'default',
-                                channelId: 'chiko-notifications',
-                                priority: 'max' as const,
-                                defaultSound: true
+                                channelId: 'chiko-notifications', // Crucial: Matches App Channel
+                                priority: 'max' as const, // Heads-up notification
+                                defaultSound: true,
+                                defaultVibrateTimings: true,
+                                visibility: 'public' as const
+                            }
+                        },
+                        apns: {
+                            payload: {
+                                aps: {
+                                    sound: 'default',
+                                    'content-available': 1
+                                }
                             }
                         }
                     };
 
                     const response = await admin.messaging().sendEachForMulticast(message);
                     console.log(`[FCM] Sent ${response.successCount} messages, ${response.failureCount} failed.`);
+
+                    if (response.failureCount > 0) {
+                        response.responses.forEach((resp, idx) => {
+                            if (!resp.success) {
+                                console.error(`[FCM] Token ${fcmTokens[idx]} failed:`, resp.error);
+                            }
+                        });
+                    }
 
                 } catch (error) {
                     console.error('[FCM] Error sending multicast:', error);
