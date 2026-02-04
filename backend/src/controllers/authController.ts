@@ -89,19 +89,18 @@ export const updatePushToken = async (req: AuthRequest, res: Response) => {
         // Update token
         await User.update({ pushToken }, { where: { id: userId } });
 
-        // Send Welcome Notification (Test)
-        if (pushToken) {
-            const { sendPushNotification } = require('../utils/notifications');
-            // We use a small timeout to ensure DB commit is seen or just fire and forget
-            setTimeout(() => {
-                sendPushNotification(
-                    [userId],
-                    'Selamat Datang! 👋',
-                    'Aplikasi Chiko Absensi siap digunakan. Notifikasi aktif.',
-                    { type: 'WELCOME_TEST' }
-                ).catch((err: any) => console.error('Welcome notif error:', err));
-            }, 1000);
-        }
+        // if (pushToken) {
+        //     const { sendPushNotification } = require('../utils/notifications');
+        //     // We use a small timeout to ensure DB commit is seen or just fire and forget
+        //     setTimeout(() => {
+        //         sendPushNotification(
+        //             [userId],
+        //             'Selamat Datang! 👋',
+        //             'Aplikasi Chiko Absensi siap digunakan. Notifikasi aktif.',
+        //             { type: 'WELCOME_TEST' }
+        //         ).catch((err: any) => console.error('Welcome notif error:', err));
+        //     }, 1000);
+        // }
 
         res.json({ message: 'Push token updated' });
     } catch (error) {
