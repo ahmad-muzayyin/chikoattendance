@@ -24,20 +24,21 @@ const sequelize = new Sequelize(
 );
 
 // Define simplified models needed
+// IMPORTANT: tableName is explicitly set to lowercase 'shifts' and 'attendances' for Linux compatibility
 const Attendance = sequelize.define('Attendance', {
     userId: DataTypes.INTEGER,
-    type: DataTypes.ENUM('CHECK_IN', 'CHECK_OUT', 'PERMIT', 'SICK'),
+    type: DataTypes.ENUM('CHECK_IN', 'CHECK_OUT', 'PERMIT', 'SICK', 'ALPHA'),
     timestamp: DataTypes.DATE,
     isLate: DataTypes.BOOLEAN,
     isHalfDay: DataTypes.BOOLEAN,
     notes: DataTypes.TEXT
-}, { timestamps: true });
+}, { timestamps: true, tableName: 'attendances' });
 
 const Shift = sequelize.define('Shift', {
     name: DataTypes.STRING,
     startHour: DataTypes.STRING, // "09:00"
     endHour: DataTypes.STRING
-}, { timestamps: true });
+}, { timestamps: true, tableName: 'shifts' });
 
 async function fixLateStatus() {
     try {
@@ -54,33 +55,57 @@ async function fixLateStatus() {
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        const lateAttendances = await Attendance.findAll({
+        const attendances = await Attendance.findAll({
             where: {
-                type: 'CHECK_IN',
-                // isLate: true, // Kita cek SEMUA checkin, siapa tau ada yang false tapi harusnya true (walaupun jarang)
                 timestamp: {
                     [Op.gte]: startOfMonth
                 }
             }
         });
 
-        console.log(`Checking ${lateAttendances.length} records...`);
+        console.log(`Checking ${attendances.length} records...`);
 
+        // --- GROUP BY USER & DATE UNTUK HAPUS ALPHA PALSU ---
+        // Jika User punya CHECK_IN di tanggal X, maka ALPHA di tanggal X harus dihapus.
+        const recordMap = {};
+
+        for (const att of attendances) {
+            const dateKey = new Date(att.timestamp).toLocaleDateString('en-CA'); // YYYY-MM-DD
+            const userKey = `${att.userId}_${dateKey}`;
+
+            if (!recordMap[userKey]) recordMap[userKey] = [];
+            recordMap[userKey].push(att);
+        }
+
+        let alphaRemoved = 0;
+        for (const key in recordMap) {
+            const records = recordMap[key];
+            const hasCheckIn = records.some(r => r.type === 'CHECK_IN');
+            const hasAlpha = records.some(r => r.type === 'ALPHA');
+
+            if (hasCheckIn && hasAlpha) {
+                // Hapus semua ALPHA hari ini karena dia hadir
+                const alphas = records.filter(r => r.type === 'ALPHA');
+                for (const alpha of alphas) {
+                    console.log(`🔥 Menghapus ALPHA User ${alpha.userId} tanggal ${alpha.timestamp} karena sudah CHECK_IN.`);
+                    await alpha.destroy();
+                    alphaRemoved++;
+                }
+            }
+        }
+        console.log(`✅ ${alphaRemoved} Data ALPHA palsu dihapus/dibersihkan.`);
+
+
+        // --- KOREKSI STATUS TELAT ---
+        const checkIns = attendances.filter(a => a.type === 'CHECK_IN');
         let correctedCount = 0;
 
-        for (const record of lateAttendances) {
+        for (const record of checkIns) {
             const checkInTime = new Date(record.timestamp);
-
-            // Konversi ke Menit WIB manually to avoid timezone confusion
-            // We assume stored timestamp is correctly UTC or local, handled by Sequelize
-            // Let's use getHours which respects the timezone setting if properly loaded, 
-            // OR use toLocaleTimeString
 
             const timeString = checkInTime.toLocaleTimeString('en-GB', { timeZone: 'Asia/Jakarta', hour12: false });
             const [hStr, mStr] = timeString.split(':');
             const currentTotalMinutes = parseInt(hStr) * 60 + parseInt(mStr);
-
-            // console.log(`   > Cek ID ${record.id}: ${timeString} (${currentTotalMinutes}m)`);
 
             // SMART SHIFT DETECTION
             let targetShift = null;
@@ -98,7 +123,6 @@ async function fixLateStatus() {
 
             if (!targetShift) continue;
 
-            // HITUNG TELAT ULANG
             const [sHour, sMinute] = targetShift.startHour.split(':').map(Number);
             const shiftStartTotalMinutes = sHour * 60 + sMinute;
             const tolerance = 10; // 10 menit
@@ -107,13 +131,9 @@ async function fixLateStatus() {
 
             // KOREKSI
             if (record.isLate !== shouldBeLate) {
-                console.log(`🛠️ Koreksi ID ${record.id} (${record.type}):`);
-                console.log(`   Waktu: ${timeString} (WIB)`);
-                console.log(`   Shift: ${targetShift.name} (${targetShift.startHour})`);
-                console.log(`   Status Lama: ${record.isLate ? 'TELAT' : 'HADIR'} -> Baru: ${shouldBeLate ? 'TELAT' : 'HADIR'}`);
+                console.log(`🛠️ Koreksi ID ${record.id}: ${timeString} (${targetShift.name}). Status: ${record.isLate ? 'TELAT' : 'HADIR'} -> ${shouldBeLate ? 'TELAT' : 'HADIR'}`);
 
                 record.isLate = shouldBeLate;
-                // Opsional: Tambahkan catatan
                 if (!shouldBeLate && record.notes && !record.notes.includes('Koreksi')) {
                     record.notes = record.notes + ' (Koreksi Sistem)';
                 }
@@ -123,7 +143,7 @@ async function fixLateStatus() {
             }
         }
 
-        console.log(`✅ Selesai! ${correctedCount} data absensi telah dikoreksi.`);
+        console.log(`✅ Selesai! ${correctedCount} data absensi telah dikoreksi status telatnya.`);
 
     } catch (error) {
         console.error('Error:', error);
