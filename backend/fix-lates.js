@@ -10,7 +10,7 @@ console.log('Using Config:', {
     host: process.env.DB_HOST || 'localhost'
 });
 
-// Setup Database Connection manually since we are in a standalone script
+// Setup Database Connection manually
 const sequelize = new Sequelize(
     process.env.DB_NAME || 'chiko_attendance',
     process.env.DB_USER || 'root',
@@ -24,9 +24,7 @@ const sequelize = new Sequelize(
 );
 
 // Define simplified models needed
-// IMPORTANT: Table names adjusted based on specific DB state (Case Sensitivity)
-// Shifts -> 'shifts'
-// Attendances -> 'Attendances' (Based on previous error logs)
+// FIXED TABLE NAMES BASED ON SOURCE CODE AND DB CHECK
 const Attendance = sequelize.define('Attendance', {
     userId: DataTypes.INTEGER,
     type: DataTypes.ENUM('CHECK_IN', 'CHECK_OUT', 'PERMIT', 'SICK', 'ALPHA'),
@@ -34,13 +32,13 @@ const Attendance = sequelize.define('Attendance', {
     isLate: DataTypes.BOOLEAN,
     isHalfDay: DataTypes.BOOLEAN,
     notes: DataTypes.TEXT
-}, { timestamps: true, tableName: 'Attendances' });
+}, { timestamps: true, tableName: 'attendance' }); // <-- FIXED: Singular 'attendance'
 
 const Shift = sequelize.define('Shift', {
     name: DataTypes.STRING,
     startHour: DataTypes.STRING, // "09:00"
     endHour: DataTypes.STRING
-}, { timestamps: true, tableName: 'shifts' });
+}, { timestamps: true, tableName: 'shifts' }); // <-- FIXED: Plural 'shifts'
 
 async function fixLateStatus() {
     try {
@@ -50,14 +48,13 @@ async function fixLateStatus() {
 
         // 1. Ambil Semua Shift
         const shifts = await Shift.findAll();
-        console.log(`📋 Ditemukan ${shifts.length} Shift aktif (Table: shifts).`);
-        shifts.forEach(s => console.log(`   - ${s.name}: ${s.startHour} s/d ${s.endHour}`));
+        console.log(`📋 Ditemukan ${shifts.length} Shift aktif.`);
 
         // 2. Ambil Absensi Bulan Ini
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        console.log('🔍 Mengambil data absensi (Table: Attendances)...');
+        console.log('🔍 Mengambil data absensi (Table: attendance)...');
         const attendances = await Attendance.findAll({
             where: {
                 timestamp: {
