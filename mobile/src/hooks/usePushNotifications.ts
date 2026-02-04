@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
@@ -45,12 +44,25 @@ export const usePushNotifications = () => {
                 return;
             }
             try {
-                token = (await Notifications.getExpoPushTokenAsync({
-                    projectId: '0c277e4c-50cb-4331-a6d0-fb9c11201c94'
-                })).data;
-                console.log('Expo Push Token Message:', token); // Changed log
-            } catch (e) {
-                console.error('Error fetching push token', e);
+                // 1. Try to get FCM Device Token (For Production/APK)
+                // This requires google-services.json to be configured in app.json and present in root
+                const deviceAppData = await Notifications.getDevicePushTokenAsync();
+                token = deviceAppData.data;
+                console.log('FCM Device Token Obtained:', token);
+            } catch (e: any) {
+                console.warn('FCM Token skipped (OK for Expo Go):', e.message);
+
+                // 2. Fallback to Expo Token (For Development/Expo Go)
+                // This allows development without Google Services strict config
+                try {
+                    const projectData = await Notifications.getExpoPushTokenAsync({
+                        projectId: '5d34e301-94d3-4555-9ab0-134a376cc49e' // From app.json extra.eas.projectId
+                    });
+                    token = projectData.data;
+                    console.log('Expo Push Token (Fallback):', token);
+                } catch (expoError) {
+                    console.error('Error fetching Expo token:', expoError);
+                }
             }
         } else {
             console.log('Must use physical device for Push Notifications');

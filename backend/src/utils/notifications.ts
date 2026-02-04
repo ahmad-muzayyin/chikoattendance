@@ -2,6 +2,7 @@ import { Expo } from 'expo-server-sdk';
 import { User } from '../models/User';
 import { UserRole } from '../models/User';
 import { Notification } from '../models/Notification';
+import { admin, isFirebaseInitialized } from '../config/firebase';
 
 const expo = new Expo();
 
@@ -19,11 +20,14 @@ export const sendPushNotification = async (userIds: number[], title: string, bod
 
         // 2. Send Push Notification
         const users = await User.findAll({ where: { id: userIds } });
-        const messages: any[] = [];
+        const expoMessages: any[] = [];
+        const fcmTokens: string[] = [];
 
         for (const user of users) {
-            if (user.pushToken && Expo.isExpoPushToken(user.pushToken)) {
-                messages.push({
+            if (!user.pushToken) continue;
+
+            if (Expo.isExpoPushToken(user.pushToken)) {
+                expoMessages.push({
                     to: user.pushToken,
                     sound: 'default',
                     title,
@@ -32,18 +36,60 @@ export const sendPushNotification = async (userIds: number[], title: string, bod
                     priority: 'high',
                     channelId: 'chiko-notifications',
                 });
+            } else {
+                // Assume it is FCM Device Token (if not Expo token)
+                fcmTokens.push(user.pushToken);
             }
         }
 
-        const chunks = expo.chunkPushNotifications(messages);
-
-        for (const chunk of chunks) {
-            try {
-                await expo.sendPushNotificationsAsync(chunk);
-            } catch (error) {
-                console.error('Error sending push notification chunk:', error);
+        // A. Send Expo Messages
+        if (expoMessages.length > 0) {
+            const chunks = expo.chunkPushNotifications(expoMessages);
+            for (const chunk of chunks) {
+                try {
+                    await expo.sendPushNotificationsAsync(chunk);
+                } catch (error) {
+                    console.error('[Expo] Error sending push chunk:', error);
+                }
             }
         }
+
+        // B. Send FCM Messages (Direct)
+        if (fcmTokens.length > 0) {
+            if (isFirebaseInitialized) {
+                try {
+                    // Normalize data to string values for FCM data payload
+                    const fcmData = Object.keys(data).reduce((acc: any, key) => {
+                        acc[key] = String(data[key]);
+                        return acc;
+                    }, {});
+
+                    const message = {
+                        notification: { title, body },
+                        data: fcmData,
+                        tokens: fcmTokens,
+                        android: {
+                            priority: 'high' as const,
+                            notification: {
+                                sound: 'default',
+                                channelId: 'chiko-notifications',
+                                priority: 'max' as const,
+                                defaultSound: true
+                            }
+                        }
+                    };
+
+                    const response = await admin.messaging().sendEachForMulticast(message);
+                    console.log(`[FCM] Sent ${response.successCount} messages, ${response.failureCount} failed.`);
+
+                } catch (error) {
+                    console.error('[FCM] Error sending multicast:', error);
+                }
+            } else {
+                console.warn('[FCM] Skipping FCM tokens because Firebase is not initialized (missing serviceAccountKey.json)');
+            }
+        }
+
     } catch (error) {
         console.error('Error in sendPushNotification:', error);
     }
