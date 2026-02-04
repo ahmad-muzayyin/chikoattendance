@@ -24,7 +24,9 @@ const sequelize = new Sequelize(
 );
 
 // Define simplified models needed
-// IMPORTANT: tableName is explicitly set to lowercase 'shifts' and 'attendances' for Linux compatibility
+// IMPORTANT: Table names adjusted based on specific DB state (Case Sensitivity)
+// Shifts -> 'shifts'
+// Attendances -> 'Attendances' (Based on previous error logs)
 const Attendance = sequelize.define('Attendance', {
     userId: DataTypes.INTEGER,
     type: DataTypes.ENUM('CHECK_IN', 'CHECK_OUT', 'PERMIT', 'SICK', 'ALPHA'),
@@ -32,7 +34,7 @@ const Attendance = sequelize.define('Attendance', {
     isLate: DataTypes.BOOLEAN,
     isHalfDay: DataTypes.BOOLEAN,
     notes: DataTypes.TEXT
-}, { timestamps: true, tableName: 'attendances' });
+}, { timestamps: true, tableName: 'Attendances' });
 
 const Shift = sequelize.define('Shift', {
     name: DataTypes.STRING,
@@ -48,13 +50,14 @@ async function fixLateStatus() {
 
         // 1. Ambil Semua Shift
         const shifts = await Shift.findAll();
-        console.log(`📋 Ditemukan ${shifts.length} Shift aktif.`);
+        console.log(`📋 Ditemukan ${shifts.length} Shift aktif (Table: shifts).`);
         shifts.forEach(s => console.log(`   - ${s.name}: ${s.startHour} s/d ${s.endHour}`));
 
-        // 2. Ambil Absensi Bulan Ini yang berstatus TELAT (isLate = true)
+        // 2. Ambil Absensi Bulan Ini
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
+        console.log('🔍 Mengambil data absensi (Table: Attendances)...');
         const attendances = await Attendance.findAll({
             where: {
                 timestamp: {
@@ -66,11 +69,15 @@ async function fixLateStatus() {
         console.log(`Checking ${attendances.length} records...`);
 
         // --- GROUP BY USER & DATE UNTUK HAPUS ALPHA PALSU ---
-        // Jika User punya CHECK_IN di tanggal X, maka ALPHA di tanggal X harus dihapus.
         const recordMap = {};
 
         for (const att of attendances) {
-            const dateKey = new Date(att.timestamp).toLocaleDateString('en-CA'); // YYYY-MM-DD
+            // Use UTC methods to get consistent YYYY-MM-DD from stored timestamp
+            const d = new Date(att.timestamp);
+            // Adjust to ID Date manually just for grouping keys
+            d.setHours(d.getHours() + 7);
+            const dateKey = d.toISOString().split('T')[0]; // YYYY-MM-DD (WIB day)
+
             const userKey = `${att.userId}_${dateKey}`;
 
             if (!recordMap[userKey]) recordMap[userKey] = [];
@@ -87,7 +94,7 @@ async function fixLateStatus() {
                 // Hapus semua ALPHA hari ini karena dia hadir
                 const alphas = records.filter(r => r.type === 'ALPHA');
                 for (const alpha of alphas) {
-                    console.log(`🔥 Menghapus ALPHA User ${alpha.userId} tanggal ${alpha.timestamp} karena sudah CHECK_IN.`);
+                    console.log(`🔥 Menghapus ALPHA User ${alpha.userId} (Key: ${key}) karena sudah CHECK_IN.`);
                     await alpha.destroy();
                     alphaRemoved++;
                 }
