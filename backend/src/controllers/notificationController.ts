@@ -75,11 +75,11 @@ export const sendTestNotification = async (req: AuthRequest, res: Response) => {
         let title = 'Jangan Lupa Absen!';
         let message = 'Jangan lupa melakukan Absensi Masuk/Pulang hari ini ya!';
 
-        // If OWNER triggers this, broadcast to ALL users
-        if (userRole === 'OWNER') {
+        // If OWNER or ADMIN triggers this, broadcast to ALL users
+        if (userRole === 'OWNER' || userRole === 'ADMIN') {
             const allUsers = await User.findAll({ attributes: ['id'] });
             targetIds = allUsers.map(u => u.id);
-            console.log(`[Broadcast] Owner ${userId} sending notification to ${targetIds.length} users.`);
+            console.log(`[Broadcast] ${userRole} ${userId} sending notification to ${targetIds.length} users.`);
 
             // Optional: Customize message for broadcast
             title = 'PENGUMUMAN';
