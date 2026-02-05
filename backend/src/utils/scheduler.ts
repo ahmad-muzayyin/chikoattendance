@@ -9,6 +9,94 @@ export const initScheduler = () => {
     console.log('[Scheduler] Initialized:');
     console.log('  - Alpha checker: 23:55 daily');
     console.log('  - Attendance Checks (Checkout/Overtime): Every 5 min');
+    console.log('  - Morning Reminder: 06:50 WIB');
+    console.log('  - Afternoon Reminder: 13:50 WIB');
+
+    // 0. Morning Reminder (06:50 WIB)
+    cron.schedule('50 6 * * *', async () => {
+        console.log('[Scheduler] Running Morning Reminder (06:50 WIB)...');
+        try {
+            const users = await User.findAll({
+                where: { role: { [Op.notIn]: [UserRole.OWNER] } },
+                attributes: ['id', 'pushToken']
+            });
+
+            const userIds = users.filter(u => u.pushToken).map(u => u.id);
+            if (userIds.length > 0) {
+                await sendPushNotification(
+                    userIds,
+                    'Selamat Pagi! ☀️',
+                    'Jangan lupa lakukan Absensi Masuk sebelum mulai bekerja hari ini.',
+                    { type: 'REMINDER_MORNING' }
+                );
+                console.log(`[Scheduler] Sent Morning Reminder to ${userIds.length} users.`);
+            }
+        } catch (error) {
+            console.error('[Scheduler] Error Morning Reminder:', error);
+        }
+    }, {
+        timezone: "Asia/Jakarta"
+    });
+
+    // 0.5 Afternoon/Late Check-in Reminder (13:50 WIB)
+    cron.schedule('50 13 * * *', async () => {
+        console.log('[Scheduler] Running Afternoon Check-in Reminder (13:50 WIB)...');
+        try {
+            const now = new Date();
+
+            // Calculate Start of Day Jakarta (00:00 WIB Today)
+            const startOfTodayJakarta = new Date(now);
+            startOfTodayJakarta.setHours(startOfTodayJakarta.getHours() + 7); // Shift generic hours to "Jakarta View"
+            startOfTodayJakarta.setUTCHours(0, 0, 0, 0); // Reset to midnight UTC... wait, logic is tricky with date objects.
+
+            // Safer Calculation for 00:00 WIB in UTC
+            // 00:00 WIB = 17:00 UTC (Previous Day). 
+            // We are currently at 13:50 WIB (06:50 UTC). 
+            // Time since 00:00 WIB = 13h 50m.
+            // So simply subtract 14 hours from 'now' to be safely inside "Yesterday UTC" / "Today Start WIB"
+
+            const safeStartThreshold = new Date(now.getTime() - (14 * 60 * 60 * 1000));
+
+            // Get all active users
+            const users = await User.findAll({
+                where: { role: { [Op.notIn]: [UserRole.OWNER] } }
+            });
+
+            const userIdsToSend: number[] = [];
+
+            for (const user of users) {
+                const hasCheckIn = await Attendance.findOne({
+                    where: {
+                        userId: user.id,
+                        type: AttendanceType.CHECK_IN,
+                        timestamp: {
+                            [Op.gte]: safeStartThreshold
+                        }
+                    }
+                });
+
+                // If NO check-in found since today started
+                if (!hasCheckIn) {
+                    userIdsToSend.push(user.id);
+                }
+            }
+
+            if (userIdsToSend.length > 0) {
+                await sendPushNotification(
+                    userIdsToSend,
+                    'Belum Absen? ⚠️',
+                    'Sistem mencatat Anda belum Check-in hari ini. Jika Anda Shift Siang, jangan lupa absen sekarang!',
+                    { type: 'REMINDER_AFTERNOON' }
+                );
+                console.log(`[Scheduler] Sent Afternoon Reminder to ${userIdsToSend.length} users.`);
+            }
+
+        } catch (error) {
+            console.error('[Scheduler] Error Afternoon Reminder:', error);
+        }
+    }, {
+        timezone: "Asia/Jakarta"
+    });
 
     // Run every day at 23:55 (11:55 PM)
     cron.schedule('55 23 * * *', async () => {
