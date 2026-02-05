@@ -51,10 +51,37 @@ export const sendPushNotification = async (userIds: number[], title: string, bod
                     await expo.sendPushNotificationsAsync(chunk);
                 } catch (error: any) {
                     if (error.code === 'PUSH_TOO_MANY_EXPERIENCE_IDS') {
-                        console.warn('[Expo] Error: Token conflict (Mixed Project IDs).');
-                        // Log specific details if needed
-                        if (error.details) {
-                            console.warn('Conflict Details:', JSON.stringify(error.details));
+                        console.warn('[Expo] Token conflict detected (Mixed Project IDs). Regrouping and resending...');
+
+                        // error.details is like: { "@user/proj": ["token1", "token2"], ... }
+                        const details = error.details || {};
+                        const tokensToMessage = new Map<string, any>();
+
+                        // Map tokens back to original message objects
+                        chunk.forEach((msg: any) => {
+                            if (typeof msg.to === 'string') tokensToMessage.set(msg.to, msg);
+                        });
+
+                        // Separate by project -> Resend
+                        for (const projectId in details) {
+                            const projectTokens = details[projectId];
+                            const newBatch: any[] = [];
+
+                            for (const token of projectTokens) {
+                                const originalMsg = tokensToMessage.get(token);
+                                if (originalMsg) {
+                                    newBatch.push(originalMsg);
+                                }
+                            }
+
+                            if (newBatch.length > 0) {
+                                try {
+                                    console.log(`[Expo] Resending batch for project ${projectId} (${newBatch.length} notifications)`);
+                                    await expo.sendPushNotificationsAsync(newBatch);
+                                } catch (retryError) {
+                                    console.error(`[Expo] Failed to resend batch for ${projectId}:`, retryError);
+                                }
+                            }
                         }
                     } else {
                         console.error('[Expo] Error sending push chunk:', error);
