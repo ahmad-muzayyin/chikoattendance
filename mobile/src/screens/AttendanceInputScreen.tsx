@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Image, ScrollView, Dimensions, TouchableOpacity, Alert } from 'react-native';
-import { Text, Button, TextInput, Card, Portal, Modal, IconButton, Surface, ActivityIndicator, useTheme } from 'react-native-paper';
+import { Text, Button, TextInput, Card, Portal, Modal, IconButton, Surface, ActivityIndicator, useTheme, Dialog } from 'react-native-paper';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
