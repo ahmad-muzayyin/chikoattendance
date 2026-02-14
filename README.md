@@ -142,3 +142,47 @@ npx expo start -c
 
 ## ©️ License
 Proyek Internal - Chiko Attendance (2025/2026).
+
+
+
+```markdown
+## 📱 Deskripsi Play Store: Chiko Attendance
+
+**Chiko Attendance – Solusi Absensi Cerdas, Akurat, & Anti-Curang!**
+
+Kelola kehadiran karyawan multi-outlet Anda dengan lebih mudah dan transparan menggunakan Chiko Attendance. Aplikasi absensi berbasis lokasi (GPS) dan biometrik wajah (Selfie) ini dirancang khusus untuk memastikan produktivitas tim terjaga tanpa celah manipulasi.
+
+### 🌟 Fitur Unggulan:
+
+📍 **Presensi Berbasis Lokasi (Geofencing)**
+Karyawan hanya dapat melakukan Check-In dan Check-Out jika berada dalam radius lokasi kantor atau outlet yang telah ditentukan. Tidak ada lagi titip absen dari rumah!
+
+📸 **Verifikasi Selfie Real-Time**
+Setiap absensi wajib disertai foto selfie. Sistem memastikan bahwa orang yang melakukan absen adalah karyawan yang bersangkutan.
+
+🛡️ **Sistem Anti-Fraud (Anti-Manipulasi)**
+- **Waktu Server Akurat:** Menggunakan sinkronisasi waktu server (WIB), sehingga karyawan tidak bisa memanipulasi jam pada HP mereka.
+- **Satu Akun, Satu Device:** Mencegah penggunaan akun di banyak perangkat.
+- **Validasi Ketat:** Sistem memastikan urutan Check-In dan Check-Out yang benar setiap harinya.
+
+📊 **Manajemen Role yang Lengkap**
+- **OWNER:** Pantau seluruh cabang secara real-time, lihat rekap bulanan, dan kelola data karyawan dalam satu genggaman.
+- **KEPALA TOKO (HEAD):** Kelola operasional cabang spesifik dengan fitur peringatan durasi kerja otomatis.
+- **KARYAWAN:** Lakukan absensi harian, ajukan izin/sakit, dan pantau riwayat kehadiran serta poin performa secara mandiri.
+
+🤖 **Otomatisasi Status ALPHA & Sanksi**
+Sistem cerdas kami akan mendeteksi otomatis karyawan yang tidak hadir tanpa keterangan setiap pukul 23:55 WIB. Status akan berubah menjadi ALPHA dan poin pelanggaran akan diberikan secara otomatis.
+
+🏆 **Sistem Poin & Leaderboard**
+Tingkatkan kedisiplinan dengan sistem poin pelanggaran. Pantau siapa karyawan paling rajin dan siapa yang sering melanggar melalui dashboard monitoring.
+
+---
+
+**Kenapa Memilih Chiko Attendance?**
+✅ Efisiensi biaya perangkat (tidak perlu mesin fingerprint).
+✅ Monitoring real-time dari mana saja.
+✅ Laporan kehadiran yang siap pakai (Export-ready).
+✅ User interface yang modern dan mudah digunakan oleh siapa saja.
+
+**Tinggalkan cara lama, beralih ke Chiko Attendance sekarang!**
+```

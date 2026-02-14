@@ -451,9 +451,9 @@ export const getCalendar = async (req: AuthRequest, res: Response) => {
         const attendances = await Attendance.findAll({
             where: {
                 userId,
-                // type: AttendanceType.CHECK_IN, // <-- REMOVED restriction
+                // Include CHECK_OUT to pair data
                 type: {
-                    [Op.or]: [AttendanceType.CHECK_IN, AttendanceType.PERMIT, AttendanceType.SICK]
+                    [Op.or]: [AttendanceType.CHECK_IN, AttendanceType.CHECK_OUT, AttendanceType.PERMIT, AttendanceType.SICK]
                 },
                 timestamp: {
                     [Op.gte]: startOfMonth,
@@ -463,44 +463,69 @@ export const getCalendar = async (req: AuthRequest, res: Response) => {
             order: [['timestamp', 'ASC']]
         });
 
-        // Format data for calendar
-        const calendarData = attendances.map(att => {
+        // Group by Date to merge CheckIn and CheckOut
+        const dailyMap = new Map<string, any>();
+
+        attendances.forEach(att => {
             const date = new Date(att.timestamp);
-            // Fix: Use WIB date for mapping to catch mismatches
             const dateStr = date.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }); // YYYY-MM-DD
 
-            let status = 'onTime';
-            // Force WIB Timezone for Display
+            // Format Time (HH:mm) force dot to colon if needed for consistency
             let timeStr = date.toLocaleTimeString('id-ID', {
                 timeZone: 'Asia/Jakarta',
                 hour: '2-digit',
                 minute: '2-digit',
                 hour12: false
-            });
-            let notes = att.notes;
+            }).replace(/\./g, ':');
 
-            if (att.type === AttendanceType.CHECK_IN) {
-                if (att.isLate) status = 'late';
-                if (!notes) notes = att.isLate ? 'Terlambat' : 'Tepat Waktu';
-            } else if (att.type === AttendanceType.PERMIT) {
-                status = 'off';
-                timeStr = '-'; // No time for permit
-                if (!notes) notes = 'Izin (Cuti/Keperluan)';
-            } else if (att.type === AttendanceType.SICK) {
-                status = 'off';
-                timeStr = '-';
-                if (!notes) notes = 'Sakit';
+            if (!dailyMap.has(dateStr)) {
+                dailyMap.set(dateStr, {
+                    date: dateStr,
+                    status: 'absent', // Default
+                    time: '-',
+                    checkInTime: null,
+                    checkOutTime: null,
+                    isHalfDay: false,
+                    isLate: false,
+                    notes: '',
+                    type: null
+                });
             }
 
-            return {
-                date: dateStr,
-                status,
-                time: timeStr,
-                isHalfDay: att.isHalfDay || false,
-                isLate: att.isLate,
-                notes: notes
-            };
+            const record = dailyMap.get(dateStr);
+
+            if (att.type === AttendanceType.CHECK_IN) {
+                record.checkInTime = timeStr;
+                record.time = timeStr; // Keep 'time' for backward compatibility (CheckIn Time)
+                record.status = att.isLate ? 'late' : 'onTime';
+                record.isLate = att.isLate;
+                record.isHalfDay = att.isHalfDay;
+                record.type = 'CHECK_IN';
+                // Priority notes
+                if (att.notes) record.notes = att.notes;
+                if (!record.notes) record.notes = att.isLate ? 'Terlambat' : 'Tepat Waktu';
+
+            } else if (att.type === AttendanceType.CHECK_OUT) {
+                record.checkOutTime = timeStr;
+                // Append checkout note if exists and not redundant
+                if (att.notes && !record.notes.includes(att.notes)) {
+                    // record.notes += ` | ${att.notes}`; // Optional: Don't clutter notes
+                }
+            } else if (att.type === AttendanceType.PERMIT) {
+                record.status = 'off';
+                record.time = '-';
+                record.type = 'PERMIT';
+                if (!record.notes) record.notes = att.notes || 'Izin';
+            } else if (att.type === AttendanceType.SICK) {
+                record.status = 'off';
+                record.time = '-';
+                record.type = 'SICK';
+                if (!record.notes) record.notes = att.notes || 'Sakit';
+            }
         });
+
+        // Convert Map to Array
+        const calendarData = Array.from(dailyMap.values());
 
         res.json(calendarData);
 
