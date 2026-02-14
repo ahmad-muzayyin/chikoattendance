@@ -3,7 +3,7 @@
     "name": "Chiko Absensi",
     "slug": "chiko-attendance",
     "scheme": "com.chiko.attendance",
-    "version": "1.0.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -23,7 +23,7 @@
     },
     "android": {
       "package": "com.chiko.attendance",
-      "versionCode": 1,
+      "versionCode": 4,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#EC1616"
@@ -53,11 +53,18 @@
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "newArchEnabled": false
           }
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Chiko Absensi to access your camera."
+        }
+      ]
     ],
     "extra": {
       "eas": {

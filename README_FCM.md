@@ -33,3 +33,14 @@ Setelah menambahkan `google-services.json`, Anda harus melakukan build ulang APK
 ## Cara Kerja Sistem Baru
 - **Saat Development (Expo Go):** Aplikasi akan menggunakan "Expo Push Token". Notifikasi tetap masuk via Expo Server.
 - **Saat Production (APK):** Aplikasi otomatis mendeteksi konfigurasi FCM dan menggunakan "FCM Device Token". Notifikasi dikirim lansung via Google Server (Lebih Cepat & Stabil seperti WhatsApp).
+
+
+
+```markdown
+## Catatan Rilis (Changelog)
+- Migrasi FCM API V1: Menggantikan API Legacy untuk keamanan dan performa lebih baik.
+- Direct FCM Integration: Pengiriman notifikasi kini langsung ke Firebase tanpa perantara pihak ketiga di mode production.
+- Auto-detection Logic: Sistem cerdas yang mendeteksi apakah aplikasi berjalan di Expo Go atau Standalone APK untuk menentukan jenis token yang digunakan.
+- High Priority Support: Notifikasi tetap muncul meskipun aplikasi dalam keadaan background atau kill state.
+```
+

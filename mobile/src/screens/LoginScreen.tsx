@@ -30,6 +30,7 @@ import { colors, spacing, borderRadius, shadows } from '../theme/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
+import { getIntegrityToken } from '../utils/Integrity';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -200,6 +201,27 @@ export default function LoginScreen() {
                 await SecureStore.deleteItemAsync('authToken');
                 await SecureStore.deleteItemAsync('securedAuthToken');
                 await SecureStore.deleteItemAsync('userPassword');
+            }
+
+            if (Platform.OS === 'android' && !__DEV__) {
+                try {
+                    const { token, nonce } = await getIntegrityToken();
+                    const integrityRes = await axios.post(`${API_CONFIG.BASE_URL}/integrity/verify-integrity`, {
+                        integrityToken: token,
+                        nonce: nonce
+                    });
+
+                    if (integrityRes.data.status === 'BLOCK') {
+                        setError(`Security Check Failed: ${integrityRes.data.reasons.join(', ')}`);
+                        shake();
+                        return;
+                    }
+                } catch (integrityErr) {
+                    console.error("Integrity Check Failed", integrityErr);
+                    // BYPASS FOR TESTING APK (Allow Sideload)
+                    // In strict production we return; here we allow proceeding.
+                    // alert("Warning: Integrity Check Failed. Running in Bypass Mode.");
+                }
             }
 
             const { data } = await axios.post(

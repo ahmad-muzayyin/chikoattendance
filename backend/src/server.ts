@@ -12,6 +12,7 @@ import shiftRoutes from './routes/shiftRoutes';
 import positionRoutes from './routes/positionRoutes';
 import eventRoutes from './routes/eventRoutes'; // Import Event Routes
 import reportRoutes from './routes/reportRoutes'; // Import Report Routes
+import integrityRoutes from './routes/integrityRoutes'; // Import Integrity Routes
 import { connectDB } from './config/db';
 import { User, UserRole } from './models/User';
 import { Event } from './models/Event'; // Import Event Model
@@ -42,6 +43,7 @@ app.use('/api/shifts', shiftRoutes);
 app.use('/api/positions', positionRoutes);
 app.use('/api/events', eventRoutes); // Register Event Routes
 app.use('/api/reports', reportRoutes); // Register Report Routes
+app.use('/api/integrity', integrityRoutes); // Register Integrity Routes
 
 // Test endpoint
 app.get('/api/ping', (req, res) => {
