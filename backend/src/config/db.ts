@@ -12,7 +12,7 @@ export const sequelize = new Sequelize(dbName, dbUser, dbPass, {
     host: dbHost,
     dialect: 'mysql',
     logging: false, // Set to console.log to see SQL queries
-    timezone: '+07:00' // Adjust to local timezone
+    timezone: '+00:00' // Force UTC to avoid double conversion 
 });
 
 export const connectDB = async () => {
