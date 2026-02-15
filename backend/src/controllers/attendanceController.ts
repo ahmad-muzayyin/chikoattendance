@@ -485,6 +485,8 @@ export const getCalendar = async (req: AuthRequest, res: Response) => {
                     [Op.or]: [AttendanceType.CHECK_IN, AttendanceType.CHECK_OUT, AttendanceType.PERMIT, AttendanceType.SICK]
                 },
                 timestamp: {
+                    [Op.gte]: startOfMonth,
+                    [Op.lte]: endOfMonth
                 }
             },
             order: [['timestamp', 'ASC']]
@@ -496,7 +498,20 @@ export const getCalendar = async (req: AuthRequest, res: Response) => {
 
         attendances.forEach(att => {
             const date = new Date(att.timestamp);
-            const dateStr = date.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }); // YYYY-MM-DD
+
+            // FIX: Use raw ISO date part (YYYY-MM-DD) from the timestamp itself
+            // taking into account the offset manually if needed, or trusting the DB stored value.
+            // Safe bet: Convert to Jakarta Time explicitly, then take YYYY-MM-DD
+            // However, to be absolutely sure we match "Calendar Date", we use English Locale targeting Jakarta
+            // But if that fails, we fallback to string manipulation of the Date object which usually is in Server Local Time?
+            // NO. The previous issue was likely `toLocaleDateString` behavior on the server environment.
+            // Let's use specific formatting that is less ambiguous.
+
+            const jakartaDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+            const yyyy = jakartaDate.getFullYear();
+            const mm = String(jakartaDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(jakartaDate.getDate()).padStart(2, '0');
+            const dateStr = `${yyyy}-${mm}-${dd}`;
 
             // Time formatting
             let timeStr = date.toLocaleTimeString('id-ID', {
