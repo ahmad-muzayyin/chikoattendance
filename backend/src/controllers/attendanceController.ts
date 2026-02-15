@@ -690,15 +690,86 @@ export const getDashboardStats = async (req: AuthRequest, res: Response) => {
                     [Op.lte]: endOfMonth
                 }
             },
-            attributes: ['type', 'isLate']
+            attributes: ['type', 'isLate', 'timestamp'] // Added timestamp
         });
+
+        // STATUS CHECK LOGIC
+        const jakartaDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+        const todayStart = new Date(`${jakartaDateStr}T00:00:00+07:00`);
+        const todayEnd = new Date(`${jakartaDateStr}T23:59:59.999+07:00`);
+
+        const todayCheckIn = await Attendance.findOne({
+            where: {
+                userId,
+                type: AttendanceType.CHECK_IN,
+                timestamp: { [Op.gte]: todayStart, [Op.lte]: todayEnd }
+            },
+            order: [['timestamp', 'DESC']]
+        });
+
+        const todayCheckOut = await Attendance.findOne({
+            where: {
+                userId,
+                type: AttendanceType.CHECK_OUT,
+                timestamp: { [Op.gte]: todayStart, [Op.lte]: todayEnd }
+            },
+            order: [['timestamp', 'DESC']]
+        });
+
+        let currentStatus = 'NONE';
+        let lastCheckInTime = null;
+
+        if (todayCheckIn) {
+            lastCheckInTime = todayCheckIn.timestamp;
+            if (todayCheckOut) {
+                currentStatus = 'CHECKED_OUT';
+            } else {
+                currentStatus = 'CHECKED_IN';
+            }
+        } else {
+            // Cek jika ada sesi menggantung dari kemarin (Lupa Checkout)
+            // Check 24 hours back
+            const yesterdayStart = new Date(todayStart);
+            yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+
+            const lastSession = await Attendance.findOne({
+                where: {
+                    userId,
+                    type: AttendanceType.CHECK_IN,
+                    timestamp: { [Op.gte]: yesterdayStart }
+                },
+                order: [['timestamp', 'DESC']]
+            });
+
+            if (lastSession) {
+                // Check if paired checkout exist
+                const pairCheckout = await Attendance.findOne({
+                    where: {
+                        userId,
+                        type: AttendanceType.CHECK_OUT,
+                        timestamp: { [Op.gt]: lastSession.timestamp }
+                    }
+                });
+
+                if (!pairCheckout) {
+                    // Still Active? < 24h
+                    const diff = now.getTime() - new Date(lastSession.timestamp).getTime();
+                    if (diff < 24 * 60 * 60 * 1000) {
+                        currentStatus = 'CHECKED_IN';
+                        lastCheckInTime = lastSession.timestamp;
+                    }
+                }
+            }
+        }
 
         const stats = {
             hadir: attendances.filter(a => a.type === AttendanceType.CHECK_IN && !a.isLate).length,
             telat: attendances.filter(a => a.isLate && a.type === AttendanceType.CHECK_IN).length,
             lembur: attendances.filter(a => a.isOvertime).length,
             izin: attendances.filter(a => a.type === AttendanceType.PERMIT || a.type === AttendanceType.SICK).length,
-            alpha: attendances.filter(a => a.type === AttendanceType.ALPHA).length
+            alpha: attendances.filter(a => a.type === AttendanceType.ALPHA).length,
+            currentStatus,
+            lastCheckInTime
         };
 
         res.json(stats);

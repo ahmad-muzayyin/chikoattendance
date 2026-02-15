@@ -19,7 +19,7 @@ try {
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
-import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { API_CONFIG, ENDPOINTS } from '../config/api';
 import { colors, spacing, borderRadius, shadows } from '../theme/theme';
@@ -75,57 +75,59 @@ export default function AttendanceInputScreen() {
     const [activeEvent, setActiveEvent] = useState<any>(null);
 
     const [userShift, setUserShift] = useState<{ endHour: string } | null>(null);
+    const [hasCheckedOutToday, setHasCheckedOutToday] = useState(false);
 
     // Initial Data Fetch
-    useEffect(() => {
-        (async () => {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status === 'granted') {
-                getLocation();
-            } else {
-                setStatusMessage('Izin lokasi diperlukan.');
-            }
+    useFocusEffect(
+        useCallback(() => {
+            let isActive = true;
 
-            // Fetch Today's Attendance State & Shift Info
-            fetchUserDataAndAttendance();
-        })();
-
-        // Fetch Branches for detection
-        const fetchBranches = async () => {
-            try {
-                const token = await SecureStore.getItemAsync('authToken');
-                if (!token) return;
-                const { data } = await axios.get(`${API_CONFIG.BASE_URL}/branches`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                setBranches(data);
-            } catch (error) {
-                console.log('Failed to fetch branches');
-            }
-        };
-        const fetchTodayEvent = async () => {
-            try {
-                const token = await SecureStore.getItemAsync('authToken');
-                const { data } = await axios.get(`${API_CONFIG.BASE_URL}/events`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-
-                // Find today's event
-                const todayStr = new Date().toISOString().split('T')[0];
-                const event = data.find((e: any) => e.date.startsWith(todayStr)); // Match generic date part
-
-                if (event) {
-                    setActiveEvent(event);
-                    setStatusMessage(`Event: ${event.name} (Bypass Jadwal)`);
+            const init = async () => {
+                const { status } = await Location.requestForegroundPermissionsAsync();
+                if (status === 'granted') {
+                    getLocation();
+                } else {
+                    setStatusMessage('Izin lokasi diperlukan.');
                 }
-            } catch (error) {
-                console.log('No events found');
-            }
-        };
 
-        fetchBranches();
-        fetchTodayEvent();
-    }, []);
+                await fetchUserDataAndAttendance();
+            };
+
+            init();
+
+            // Fetch Branches
+            const fetchBranches = async () => {
+                try {
+                    const token = await SecureStore.getItemAsync('authToken');
+                    if (!token) return;
+                    const { data } = await axios.get(`${API_CONFIG.BASE_URL}/branches`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    if (isActive) setBranches(data);
+                } catch (error) { console.log('Failed to fetch branches'); }
+            };
+
+            const fetchTodayEvent = async () => {
+                try {
+                    const token = await SecureStore.getItemAsync('authToken');
+                    const { data } = await axios.get(`${API_CONFIG.BASE_URL}/events`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const event = data.find((e: any) => e.date.startsWith(todayStr));
+                    if (event && isActive) {
+                        setActiveEvent(event);
+                        setStatusMessage(`Event: ${event.name} (Bypass Jadwal)`);
+                    }
+                } catch (error) { console.log('No events found'); }
+            };
+
+            fetchBranches();
+            fetchTodayEvent();
+
+            return () => { isActive = false; };
+        }, [])
+    );
 
     const fetchUserDataAndAttendance = async () => {
         try {
@@ -154,19 +156,45 @@ export default function AttendanceInputScreen() {
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            // Find today (local time)
-            const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
-            const todayRecord = data.find((r: any) => r.date === todayStr);
+            // FIX PRO: Find latest ACTIVE session
+            // Priority: Find TODAY's Record explicitly
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const todayStr = `${yyyy}-${mm}-${dd}`;
 
-            if (todayRecord && todayRecord.checkInTime) {
-                let checkIn = new Date();
-                if (todayRecord.checkInTime.includes('T')) {
-                    checkIn = new Date(todayRecord.checkInTime);
+            // Reset States
+            setTodayCheckIn(null);
+            setHasCheckedOutToday(false);
+
+            // FIX COMPLETE: Use Authoritative Status from Backend
+            // Instead of guessing from Calendar, ask the Dashboard Stats endpoint which now returns 'currentStatus'
+            const statsRes = await axios.get(`${API_CONFIG.BASE_URL}/stats`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (statsRes.data && statsRes.data.currentStatus) {
+                const { currentStatus, lastCheckInTime } = statsRes.data;
+                console.log('AUTHORITATIVE STATUS:', currentStatus, lastCheckInTime);
+
+                if (currentStatus === 'CHECKED_IN') {
+                    setTodayCheckIn(new Date(lastCheckInTime)); // Valid Check In
+                    setHasCheckedOutToday(false);
+                    setStatusMessage('Status: Bekerja (Aktif)');
+                } else if (currentStatus === 'CHECKED_OUT') {
+                    setTodayCheckIn(new Date(lastCheckInTime || new Date())); // Keep visual state
+                    setHasCheckedOutToday(true); // Disable buttons
+                    setStatusMessage('Selesai Shift Hari Ini ✅');
                 } else {
-                    const [hours, minutes] = todayRecord.checkInTime.split(':');
-                    checkIn.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                    setTodayCheckIn(null);
+                    setHasCheckedOutToday(false);
+                    // Default message
                 }
-                setTodayCheckIn(checkIn);
+            } else {
+                // Fallback to old logic if backend not updated yet (Safety)
+                // ... (Original Sort Logic can stay as fallback or just be replaced)
+                console.log('Backend stats did not return status, using fallback.');
             }
         } catch (error) {
             console.log("Failed to fetch todays attendance", error);
@@ -373,6 +401,17 @@ export default function AttendanceInputScreen() {
                             ? 'Anda sudah melakukan absensi MASUK hari ini.'
                             : 'Anda sudah melakukan absensi PULANG hari ini.';
                         title = 'Absensi Duplikat';
+
+                        // AUTO-CORRECT STATE BASED ON SERVER FEEDBACK
+                        // If server says we are already checked in, assume it's true and update UI.
+                        if (type === 'CHECK_IN') {
+                            setTodayCheckIn(new Date());
+                            // Background refresh to clean up details
+                            fetchUserDataAndAttendance();
+                        } else if (type === 'CHECK_OUT') {
+                            setHasCheckedOutToday(true);
+                            fetchUserDataAndAttendance();
+                        }
                     } else if (lowerMsg.includes('shift') || lowerMsg.includes('schedule')) {
                         msg = 'Tidak ada jadwal shift yang aktif saat ini. Hubungi supervisor jika jadwal tidak sesuai.';
                         title = 'Diluar Jadwal';
@@ -615,15 +654,15 @@ export default function AttendanceInputScreen() {
                     <TouchableOpacity
                         style={[
                             styles.btnShadowContainer,
-                            (loading || !location || !todayCheckIn) && styles.disabledBtn
+                            (loading || !location || !todayCheckIn || hasCheckedOutToday) && styles.disabledBtn
                         ]}
                         onPress={() => handleSubmit('CHECK_OUT')}
-                        disabled={loading || !location || !todayCheckIn}
+                        disabled={loading || !location || !todayCheckIn || hasCheckedOutToday}
                         activeOpacity={0.9}
                     >
                         <View style={styles.btnOverflow}>
                             <LinearGradient
-                                colors={!todayCheckIn ? ['#94A3B8', '#64748B'] : ['#334155', '#1E293B']} // Grey if disabled
+                                colors={(!todayCheckIn || hasCheckedOutToday) ? ['#94A3B8', '#64748B'] : ['#334155', '#1E293B']}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 0, y: 1 }}
                                 style={styles.actionBtnGradient}
@@ -634,7 +673,7 @@ export default function AttendanceInputScreen() {
                                 <View style={styles.btnTextContainer}>
                                     <Text style={styles.btnTitleMain}>PULANG</Text>
                                     <Text style={styles.btnSubWhite}>
-                                        {todayCheckIn ? 'Selesai Shift' : 'Belum Absen Masuk'}
+                                        {hasCheckedOutToday ? 'Selesai Hari Ini' : todayCheckIn ? 'Selesai Shift' : 'Belum Masuk'}
                                     </Text>
                                 </View>
                             </LinearGradient>
