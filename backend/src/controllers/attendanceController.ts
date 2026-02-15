@@ -485,22 +485,20 @@ export const getCalendar = async (req: AuthRequest, res: Response) => {
                     [Op.or]: [AttendanceType.CHECK_IN, AttendanceType.CHECK_OUT, AttendanceType.PERMIT, AttendanceType.SICK]
                 },
                 timestamp: {
-                    [Op.gte]: startOfMonth,
-                    [Op.lte]: endOfMonth
                 }
             },
             order: [['timestamp', 'ASC']]
         });
 
-        // Group by Date to merge CheckIn and CheckOut
-        const dailyMap = new Map<string, any>();
-        let lastOpenSessionDate: string | null = null;
+        // 1. Process records LINEARLY to form Sessions (Pairing CheckIn + CheckOut)
+        const sessions: any[] = [];
+        let openSession: any = null;
 
         attendances.forEach(att => {
             const date = new Date(att.timestamp);
             const dateStr = date.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }); // YYYY-MM-DD
 
-            // Format Time (HH:mm) force dot to colon if needed for consistency
+            // Time formatting
             let timeStr = date.toLocaleTimeString('id-ID', {
                 timeZone: 'Asia/Jakarta',
                 hour: '2-digit',
@@ -508,10 +506,59 @@ export const getCalendar = async (req: AuthRequest, res: Response) => {
                 hour12: false
             }).replace(/\./g, ':');
 
+            if (att.type === AttendanceType.CHECK_IN) {
+                // Start new session
+                openSession = {
+                    dateKey: dateStr, // Groups by CheckIn Date
+                    checkIn: { time: timeStr, data: att },
+                    checkOut: null,
+                    type: 'CHECK_IN'
+                };
+                sessions.push(openSession);
+
+            } else if (att.type === AttendanceType.CHECK_OUT) {
+                if (openSession && !openSession.checkOut) {
+                    // Pair with open session
+                    const isNextDay = (dateStr !== openSession.dateKey);
+                    openSession.checkOut = {
+                        time: timeStr + (isNextDay ? ' (+1)' : ''),
+                        data: att
+                    };
+                    openSession = null; // Close session
+                } else {
+                    // Orphan CheckOut
+                    sessions.push({
+                        dateKey: dateStr,
+                        checkIn: null,
+                        checkOut: { time: timeStr, data: att },
+                        type: 'CHECK_OUT_ONLY'
+                    });
+                }
+            } else {
+                // Permit/Sick/Alpha
+                sessions.push({
+                    dateKey: dateStr,
+                    type: att.type,
+                    data: att
+                });
+            }
+        });
+
+        // 2. Map Sessions to Calendar Output Format
+        // UI expects unique date keys? Or can handle multiple?
+        // Using Map to mimic previous behavior (Last session wins if multiple per day, or array?)
+        // The Frontend renders a list. Providing distinct objects for same date might duplicate cards.
+        // Let's stick to Map to merge into single card per date (Last Session Priority or Merge info)
+
+        const dailyMap = new Map<string, any>();
+
+        sessions.forEach(session => {
+            const dateStr = session.dateKey;
+
             if (!dailyMap.has(dateStr)) {
                 dailyMap.set(dateStr, {
                     date: dateStr,
-                    status: 'absent', // Default
+                    status: 'absent',
                     time: '-',
                     checkInTime: null,
                     checkOutTime: null,
@@ -522,70 +569,45 @@ export const getCalendar = async (req: AuthRequest, res: Response) => {
                 });
             }
 
-            const currentRecord = dailyMap.get(dateStr);
+            const record = dailyMap.get(dateStr);
 
-            if (att.type === AttendanceType.CHECK_IN) {
-                currentRecord.checkInTime = timeStr;
-                currentRecord.time = timeStr; // Keep 'time' for backward compatibility (CheckIn Time)
-                currentRecord.status = att.isLate ? 'late' : 'onTime';
-                currentRecord.isLate = att.isLate;
-                currentRecord.isHalfDay = att.isHalfDay;
-                currentRecord.type = 'CHECK_IN';
+            if (session.type === 'CHECK_IN') {
+                record.checkInTime = session.checkIn.time;
+                record.time = session.checkIn.time;
+                record.type = 'CHECK_IN';
+                record.status = session.checkIn.data.isLate ? 'late' : 'onTime';
+                record.isLate = session.checkIn.data.isLate;
+                record.isHalfDay = session.checkIn.data.isHalfDay;
+
                 // Priority notes
-                if (att.notes) currentRecord.notes = att.notes;
-                if (!currentRecord.notes) currentRecord.notes = att.isLate ? 'Terlambat' : 'Tepat Waktu';
+                if (session.checkIn.data.notes) record.notes = session.checkIn.data.notes;
 
-                // Track this as open session
-                lastOpenSessionDate = dateStr;
-
-            } else if (att.type === AttendanceType.CHECK_OUT) {
-                // Logic to pair with previous day if today has no CheckIn
-                if (currentRecord.checkInTime) {
-                    // Normal Case: CheckOut Same Day
-                    currentRecord.checkOutTime = timeStr;
-                    // Append note if needed
-                    if (att.notes && !currentRecord.notes.includes(att.notes)) {
-                        // currentRecord.notes += ` | ${att.notes}`;
-                    }
-                    lastOpenSessionDate = null; // Session Closed
-
-                } else {
-                    // Orphan CheckOut on this day? Check if belongs to previous day
-                    if (lastOpenSessionDate && dailyMap.has(lastOpenSessionDate)) {
-                        const prevRecord = dailyMap.get(lastOpenSessionDate);
-
-                        // Verify previous record is indeed incomplete
-                        if (!prevRecord.checkOutTime) {
-                            prevRecord.checkOutTime = timeStr + ' (+1)'; // Mark as next day
-                            lastOpenSessionDate = null; // Session Closed
-                            return; // SKIP adding to current day's map (so it doesn't show as error today)
-                        }
-                    }
-
-                    // Fallback: Genuine Orphan CheckOut (mistake or forgot checkin)
-                    currentRecord.checkOutTime = timeStr;
-                    // Append checkout note if exists and not redundant
-                    if (att.notes && !currentRecord.notes.includes(att.notes)) {
-                        // record.notes += ` | ${att.notes}`; // Optional: Don't clutter notes
+                if (session.checkOut) {
+                    record.checkOutTime = session.checkOut.time;
+                    // Append notes
+                    if (session.checkOut.data.notes && !record.notes.includes(session.checkOut.data.notes)) {
+                        // record.notes += ...
                     }
                 }
-
-            } else if (att.type === AttendanceType.PERMIT) {
-                currentRecord.status = 'off';
-                currentRecord.time = '-';
-                currentRecord.type = 'PERMIT';
-                if (!currentRecord.notes) currentRecord.notes = att.notes || 'Izin';
-            } else if (att.type === AttendanceType.SICK) {
-                currentRecord.status = 'off';
-                currentRecord.time = '-';
-                currentRecord.type = 'SICK';
-                if (!currentRecord.notes) currentRecord.notes = att.notes || 'Sakit';
+            }
+            else if (session.type === 'CHECK_OUT_ONLY') {
+                // Only overwrite if no check-in exists for this day yet (avoid overwriting valid session with error)
+                if (!record.checkInTime) {
+                    record.checkOutTime = session.checkOut.time;
+                    record.notes = session.checkOut.data.notes || 'Tanpa Absen Masuk';
+                }
+            }
+            else if (session.type === AttendanceType.PERMIT || session.type === AttendanceType.SICK) {
+                record.status = 'off';
+                record.time = '-';
+                record.type = session.type;
+                record.notes = session.data.notes || (session.type === AttendanceType.SICK ? 'Sakit' : 'Izin');
             }
         });
 
         // Convert Map to Array
-        const calendarData = Array.from(dailyMap.values());
 
+        const calendarData = Array.from(dailyMap.values());
         res.json(calendarData);
 
     } catch (error) {
