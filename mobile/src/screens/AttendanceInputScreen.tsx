@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Image, ScrollView, Dimensions, TouchableOpacity, Alert } from 'react-native';
-import { Text, Button, TextInput, Card, Portal, Modal, IconButton, Surface, ActivityIndicator, useTheme, Dialog } from 'react-native-paper';
+import { Text, Button, TextInput, Card, Portal, Modal, IconButton, Surface, ActivityIndicator, useTheme, Dialog, Chip } from 'react-native-paper';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 
 // import * as FaceDetector from 'expo-face-detector'; // Removed to prevent crash
@@ -57,7 +57,8 @@ export default function AttendanceInputScreen() {
     const [location, setLocation] = useState<Location.LocationObject | null>(null);
     const [notes, setNotes] = useState('');
     const [loading, setLoading] = useState(false);
-    const [statusMessage, setStatusMessage] = useState('Menginisialisasi GPS...');
+    const [statusLoading, setStatusLoading] = useState(true); // Initial load state
+    const [statusMessage, setStatusMessage] = useState('Menginisialisasi...');
 
     // Branch Detection
     const [branches, setBranches] = useState<any[]>([]);
@@ -76,6 +77,8 @@ export default function AttendanceInputScreen() {
 
     const [userShift, setUserShift] = useState<{ endHour: string } | null>(null);
     const [hasCheckedOutToday, setHasCheckedOutToday] = useState(false);
+    const [todayRecord, setTodayRecord] = useState<any>(null); // To store full record for display
+    const [availableEvents, setAvailableEvents] = useState<any[]>([]); // List of all events today
 
     // Initial Data Fetch
     useFocusEffect(
@@ -83,14 +86,23 @@ export default function AttendanceInputScreen() {
             let isActive = true;
 
             const init = async () => {
-                const { status } = await Location.requestForegroundPermissionsAsync();
-                if (status === 'granted') {
-                    getLocation();
-                } else {
-                    setStatusMessage('Izin lokasi diperlukan.');
-                }
+                setStatusLoading(true);
+                try {
+                    // Parallel Execution: Don't wait for location to start fetching attendance
+                    const locationPromise = Location.requestForegroundPermissionsAsync().then(({ status }) => {
+                        if (status === 'granted') {
+                            return getLocation();
+                        } else {
+                            setStatusMessage('Izin lokasi diperlukan.');
+                        }
+                    });
 
-                await fetchUserDataAndAttendance();
+                    const attendancePromise = fetchUserDataAndAttendance();
+
+                    await Promise.all([locationPromise, attendancePromise]);
+                } finally {
+                    setStatusLoading(false);
+                }
             };
 
             init();
@@ -114,10 +126,14 @@ export default function AttendanceInputScreen() {
                         headers: { Authorization: `Bearer ${token}` }
                     });
                     const todayStr = new Date().toISOString().split('T')[0];
-                    const event = data.find((e: any) => e.date.startsWith(todayStr));
-                    if (event && isActive) {
-                        setActiveEvent(event);
-                        setStatusMessage(`Event: ${event.name} (Bypass Jadwal)`);
+                    const todaysEvents = data.filter((e: any) => e.date.startsWith(todayStr));
+
+                    if (isActive) {
+                        setAvailableEvents(todaysEvents);
+                        if (todaysEvents.length > 0) {
+                            setActiveEvent(todaysEvents[0]);
+                            setStatusMessage(`Event: ${todaysEvents[0].name} (Bypass Jadwal)`);
+                        }
                     }
                 } catch (error) { console.log('No events found'); }
             };
@@ -150,52 +166,161 @@ export default function AttendanceInputScreen() {
             } catch (e) { console.log('Failed to refresh user data'); }
 
 
-            // 2. Fetch Attendance
-            const { data } = await axios.get(
-                `${API_CONFIG.BASE_URL}${ENDPOINTS.CALENDAR}?deviceId=MOBILE_APP`,
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            // 2. Fetch Attendance (API)
+            // FETCH ALL SOURCES: Stats (Realtime), History, Calendar
+            let historyList: any[] = [];
+            let statsData: any = null;
 
-            // FIX PRO: Find latest ACTIVE session
-            // Priority: Find TODAY's Record explicitly
+            // A. Fetch Realtime Stats
+            try {
+                const statsRes = await axios.get(`${API_CONFIG.BASE_URL}/stats`, { headers: { Authorization: `Bearer ${token}` } });
+                statsData = statsRes.data;
+                console.log("Stats Loaded:", JSON.stringify(statsData));
+            } catch (e) { console.log("Stats failed"); }
+
+            // B. Fetch History & Calendar
+            const fetchCal = axios.get(`${API_CONFIG.BASE_URL}${ENDPOINTS.CALENDAR}?deviceId=MOBILE_APP`, { headers: { Authorization: `Bearer ${token}` } })
+                .then(res => (Array.isArray(res.data) ? res.data : (res.data?.data || [])))
+                .catch(() => []);
+
+            const fetchHist = axios.get(`${API_CONFIG.BASE_URL}${ENDPOINTS.HISTORY}?deviceId=MOBILE_APP`, { headers: { Authorization: `Bearer ${token}` } })
+                .then(res => (Array.isArray(res.data) ? res.data : (res.data?.data || [])))
+                .catch(() => []);
+
+            // C. Fetch Local Persistence (Backup for Server Lag)
+            const localStatusPromise = SecureStore.getItemAsync('local_attendance_status');
+            const localTimePromise = SecureStore.getItemAsync('local_attendance_time');
+
+            const [calData, histData, localStatus, localTimeStr] = await Promise.all([
+                fetchCal, fetchHist, localStatusPromise, localTimePromise
+            ]);
+
+            historyList = [...calData, ...histData];
+
             const now = new Date();
             const yyyy = now.getFullYear();
             const mm = String(now.getMonth() + 1).padStart(2, '0');
             const dd = String(now.getDate()).padStart(2, '0');
-            const todayStr = `${yyyy}-${mm}-${dd}`;
+            const todayDateStr = `${yyyy}-${mm}-${dd}`;
 
             // Reset States
             setTodayCheckIn(null);
             setHasCheckedOutToday(false);
+            setTodayRecord(null);
 
-            // FIX COMPLETE: Use Authoritative Status from Backend
-            // Instead of guessing from Calendar, ask the Dashboard Stats endpoint which now returns 'currentStatus'
-            const statsRes = await axios.get(`${API_CONFIG.BASE_URL}/stats`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            // LOGIC START
+            let determinedState = 'IDLE';
+            let relevantTime: Date | null = null;
+            let displayRecord: any = null;
 
-            if (statsRes.data && statsRes.data.currentStatus) {
-                const { currentStatus, lastCheckInTime } = statsRes.data;
-                console.log('AUTHORITATIVE STATUS:', currentStatus, lastCheckInTime);
-
-                if (currentStatus === 'CHECKED_IN') {
-                    setTodayCheckIn(new Date(lastCheckInTime)); // Valid Check In
-                    setHasCheckedOutToday(false);
-                    setStatusMessage('Status: Bekerja (Aktif)');
-                } else if (currentStatus === 'CHECKED_OUT') {
-                    setTodayCheckIn(new Date(lastCheckInTime || new Date())); // Keep visual state
-                    setHasCheckedOutToday(true); // Disable buttons
-                    setStatusMessage('Selesai Shift Hari Ini ✅');
-                } else {
-                    setTodayCheckIn(null);
-                    setHasCheckedOutToday(false);
-                    // Default message
+            // STRATEGY: Trust /stats if available
+            if (statsData && statsData.currentStatus) {
+                if (statsData.currentStatus === 'CHECKED_IN') {
+                    determinedState = 'CHECKED_IN';
+                    relevantTime = statsData.lastCheckInTime ? new Date(statsData.lastCheckInTime) : new Date();
+                } else if (statsData.currentStatus === 'CHECKED_OUT') {
+                    // Check if it's TODAY's checkout
+                    const lastOut = statsData.lastCheckOutTime ? new Date(statsData.lastCheckOutTime) : null;
+                    if (lastOut && lastOut.getDate() === now.getDate()) {
+                        determinedState = 'CHECKED_OUT';
+                        relevantTime = lastOut;
+                    }
                 }
-            } else {
-                // Fallback to old logic if backend not updated yet (Safety)
-                // ... (Original Sort Logic can stay as fallback or just be replaced)
-                console.log('Backend stats did not return status, using fallback.');
             }
+
+            // FALLBACK CALCULATION (If Stats says nothing or failed)
+            if (determinedState === 'IDLE') {
+                const validList = historyList.filter((r: any) => r.date && r.checkInTime);
+                const sortedData = validList.sort((a: any, b: any) => {
+                    if (a.date !== b.date) return b.date.localeCompare(a.date);
+                    return b.checkInTime.localeCompare(a.checkInTime);
+                });
+
+                const latestServerRecord = sortedData[0];
+
+                if (latestServerRecord) {
+                    const [ry, rm, rd] = latestServerRecord.date.split('-').map(Number);
+                    const [rh, rmn] = latestServerRecord.checkInTime.split(':').map(Number);
+                    const recordCheckInDate = new Date(ry, rm - 1, rd, rh, rmn);
+                    const diffMs = now.getTime() - recordCheckInDate.getTime();
+                    const hoursSinceCheckIn = diffMs / (1000 * 60 * 60);
+
+                    const isDateMatch = (yyyy === ry && (now.getMonth() + 1) === rm && now.getDate() === rd);
+                    const isCheckedOut = latestServerRecord.checkOutTime &&
+                        latestServerRecord.checkOutTime !== '00:00:00' &&
+                        latestServerRecord.checkOutTime !== '00:00';
+
+                    if (!isCheckedOut) {
+                        if (isDateMatch || hoursSinceCheckIn < 24) {
+                            determinedState = 'CHECKED_IN';
+                            relevantTime = recordCheckInDate;
+                            displayRecord = latestServerRecord;
+                        }
+                    } else {
+                        if (isDateMatch) {
+                            determinedState = 'CHECKED_OUT';
+                            relevantTime = recordCheckInDate;
+                            displayRecord = latestServerRecord;
+                        }
+                    }
+                }
+            }
+
+            // EMERGENCY LOCAL OVERRIDE (If Server is IDLE but Local is ACTIVE Today)
+            // This prevents "flicker" to IDLE when server is lagging
+            if (determinedState === 'IDLE' && localStatus && localTimeStr) {
+                const localDate = new Date(localTimeStr);
+                const isLocalToday = (localDate.getDate() === now.getDate() && localDate.getMonth() === now.getMonth() && localDate.getFullYear() === now.getFullYear());
+
+                // If local says 'CHECKED_IN' and it's from today (or very recent)
+                if (isLocalToday && localStatus === 'CHECKED_IN') {
+                    determinedState = 'CHECKED_IN';
+                    relevantTime = localDate;
+
+                    if (!displayRecord) {
+                        displayRecord = {
+                            date: todayDateStr,
+                            checkInTime: localDate.toTimeString().substring(0, 5),
+                            checkOutTime: null
+                        };
+                    }
+                    console.log(">> Server Lag Detected: Using Local 'CHECKED_IN'");
+                }
+                // If local says 'CHECKED_OUT' and it's from today
+                else if (isLocalToday && localStatus === 'CHECKED_OUT') {
+                    determinedState = 'CHECKED_OUT';
+                    if (!displayRecord) {
+                        displayRecord = {
+                            date: todayDateStr,
+                            checkInTime: "--:--",
+                            checkOutTime: localDate.toTimeString().substring(0, 5)
+                        };
+                    }
+                    console.log(">> Server Lag Detected: Using Local 'CHECKED_OUT'");
+                }
+            }
+
+            // Set Display Record based on determined state
+            if (!displayRecord) {
+                // Try to find the record corresponding to the relevant time from the history list
+                displayRecord = historyList.find((r: any) => r.date === todayDateStr);
+            }
+
+            // 3. APPLY FINAL STATE
+            if (determinedState === 'CHECKED_IN') {
+                setTodayCheckIn(relevantTime || new Date());
+                setHasCheckedOutToday(false);
+                setStatusMessage('Status: Bekerja (Aktif)');
+            } else if (determinedState === 'CHECKED_OUT') {
+                setTodayCheckIn(relevantTime || new Date());
+                setHasCheckedOutToday(true);
+                setStatusMessage('Absensi Hari Ini Selesai ✅');
+            } else {
+                setTodayCheckIn(null);
+                setHasCheckedOutToday(false);
+                setStatusMessage('Silakan Absensi Masuk');
+            }
+
         } catch (error) {
             console.log("Failed to fetch todays attendance", error);
         }
@@ -250,6 +375,11 @@ export default function AttendanceInputScreen() {
         } catch (e) {
             setStatusMessage('GPS Error. Coba lagi.');
         }
+    };
+
+    const handleRefresh = () => {
+        getLocation();
+        fetchUserDataAndAttendance();
     };
 
     const takePicture = async () => {
@@ -362,7 +492,23 @@ export default function AttendanceInputScreen() {
 
                 // If Success Check In, update local state
                 if (type === 'CHECK_IN') {
-                    setTodayCheckIn(new Date());
+                    const now = new Date();
+                    setTodayCheckIn(now);
+                    // SAVE LOCAL PERSISTENCE
+                    SecureStore.setItemAsync('local_attendance_status', 'CHECKED_IN');
+                    SecureStore.setItemAsync('local_attendance_time', now.toISOString());
+
+                    const nowStr = now.toTimeString().split(' ')[0];
+                    setTodayRecord({
+                        checkInTime: nowStr,
+                        date: now.toISOString().split('T')[0]
+                    });
+                } else {
+                    const now = new Date();
+                    // SAVE LOCAL PERSISTENCE (Checkout)
+                    SecureStore.setItemAsync('local_attendance_status', 'CHECKED_OUT');
+                    SecureStore.setItemAsync('local_attendance_time', now.toISOString());
+                    setHasCheckedOutToday(true);
                 }
 
                 setResultModal({
@@ -397,20 +543,41 @@ export default function AttendanceInputScreen() {
                     }
 
                     if (lowerMsg.includes('already') || lowerMsg.includes('sudah')) {
-                        msg = type === 'CHECK_IN'
-                            ? 'Anda sudah melakukan absensi MASUK hari ini.'
-                            : 'Anda sudah melakukan absensi PULANG hari ini.';
-                        title = 'Absensi Duplikat';
+                        // DETEKSI DUPLIKAT: Perbaiki State Aplikasi secara Paksa
+                        // Silent Recovery: Just update the state and let user press Pulang.
 
-                        // AUTO-CORRECT STATE BASED ON SERVER FEEDBACK
-                        // If server says we are already checked in, assume it's true and update UI.
+                        // Fix for "Mode Lembur" complaint:
+                        // Don't show a big modal. Just update state and show a small toast/alert.
+
                         if (type === 'CHECK_IN') {
-                            setTodayCheckIn(new Date());
-                            // Background refresh to clean up details
-                            fetchUserDataAndAttendance();
+                            const now = new Date();
+                            setTodayCheckIn(now);
+                            setHasCheckedOutToday(false);
+
+                            // SAVE LOCAL PERSISTENCE (Recovery)
+                            SecureStore.setItemAsync('local_attendance_status', 'CHECKED_IN');
+                            SecureStore.setItemAsync('local_attendance_time', now.toISOString());
+
+                            // Create a dummy record so the UI card shows something
+                            const nowStr = now.toTimeString().split(' ')[0];
+                            setTodayRecord({
+                                checkInTime: nowStr,
+                                date: now.toISOString().split('T')[0]
+                            });
+
+                            // Simple Native Alert (Less intrusive than custom modal)
+                            Alert.alert("Status Diperbarui", "Anda sudah tercatat Absen Masuk. Tombol telah dialihkan ke Absen Pulang.");
+                            return;
+
                         } else if (type === 'CHECK_OUT') {
                             setHasCheckedOutToday(true);
-                            fetchUserDataAndAttendance();
+                            setTodayCheckIn(new Date()); // Ensure it looks "done"
+                            // SAVE LOCAL PERSISTENCE
+                            SecureStore.setItemAsync('local_attendance_status', 'CHECKED_OUT');
+                            SecureStore.setItemAsync('local_attendance_time', new Date().toISOString());
+
+                            Alert.alert("Info", "Anda sudah Check-Out sebelumnya.");
+                            return;
                         }
                     } else if (lowerMsg.includes('shift') || lowerMsg.includes('schedule')) {
                         msg = 'Tidak ada jadwal shift yang aktif saat ini. Hubungi supervisor jika jadwal tidak sesuai.';
@@ -594,7 +761,7 @@ export default function AttendanceInputScreen() {
                         icon="refresh"
                         size={20}
                         iconColor="#6B7280"
-                        onPress={getLocation}
+                        onPress={handleRefresh}
                         disabled={loading}
                         style={{ margin: 0 }}
                     />
@@ -617,68 +784,92 @@ export default function AttendanceInputScreen() {
                     />
                 </View>
 
-                {/* Action Buttons */}
-                {/* Action Buttons */}
-                <View style={styles.actionContainer}>
-                    {/* CHECK IN BUTTON */}
-                    <TouchableOpacity
-                        style={[
-                            styles.btnShadowContainer,
-                            (loading || !location || !!todayCheckIn) && styles.disabledBtn
-                        ]}
-                        onPress={() => handleSubmit('CHECK_IN')}
-                        disabled={loading || !location || !!todayCheckIn}
-                        activeOpacity={0.9}
-                    >
-                        <View style={styles.btnOverflow}>
-                            <LinearGradient
-                                colors={!!todayCheckIn ? ['#94A3B8', '#64748B'] : ['#DC2626', '#B91C1C']} // Grey if done
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 0, y: 1 }}
-                                style={styles.actionBtnGradient}
-                            >
-                                <View style={styles.iconCircleWhite}>
-                                    <MaterialCommunityIcons name="login" size={24} color={!!todayCheckIn ? "#64748B" : "#DC2626"} />
-                                </View>
-                                <View style={styles.btnTextContainer}>
-                                    <Text style={styles.btnTitleMain}>MASUK</Text>
-                                    <Text style={styles.btnSubWhite}>
-                                        {todayCheckIn ? 'Sudah Absen' : 'Mulai Shift'}
-                                    </Text>
-                                </View>
-                            </LinearGradient>
+                {/* Today's Attendance Info Card */}
+                {todayRecord && (
+                    <View style={{
+                        backgroundColor: 'white',
+                        marginHorizontal: 4,
+                        marginBottom: 20,
+                        borderRadius: 16,
+                        padding: 16,
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2
+                    }}>
+                        <View style={{ flex: 1, alignItems: 'center' }}>
+                            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 4 }}>JAM MASUK</Text>
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: '#16A34A' }}>
+                                {todayRecord.checkInTime?.substring(0, 5) || '--:--'}
+                            </Text>
                         </View>
-                    </TouchableOpacity>
+                        <View style={{ width: 1, backgroundColor: '#E5E7EB', marginHorizontal: 10 }} />
+                        <View style={{ flex: 1, alignItems: 'center' }}>
+                            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 4 }}>JAM PULANG</Text>
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: todayRecord.checkOutTime ? '#DC2626' : '#9CA3AF' }}>
+                                {(todayRecord.checkOutTime && todayRecord.checkOutTime !== '00:00:00') ? todayRecord.checkOutTime.substring(0, 5) : '--:--'}
+                            </Text>
+                        </View>
+                    </View>
+                )}
 
-                    {/* CHECK OUT BUTTON */}
-                    <TouchableOpacity
-                        style={[
-                            styles.btnShadowContainer,
-                            (loading || !location || !todayCheckIn || hasCheckedOutToday) && styles.disabledBtn
-                        ]}
-                        onPress={() => handleSubmit('CHECK_OUT')}
-                        disabled={loading || !location || !todayCheckIn || hasCheckedOutToday}
-                        activeOpacity={0.9}
-                    >
-                        <View style={styles.btnOverflow}>
-                            <LinearGradient
-                                colors={(!todayCheckIn || hasCheckedOutToday) ? ['#94A3B8', '#64748B'] : ['#334155', '#1E293B']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 0, y: 1 }}
-                                style={styles.actionBtnGradient}
-                            >
-                                <View style={[styles.iconCircleWhite, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
-                                    <MaterialCommunityIcons name="logout" size={24} color="#FFF" />
-                                </View>
-                                <View style={styles.btnTextContainer}>
-                                    <Text style={styles.btnTitleMain}>PULANG</Text>
-                                    <Text style={styles.btnSubWhite}>
-                                        {hasCheckedOutToday ? 'Selesai Hari Ini' : todayCheckIn ? 'Selesai Shift' : 'Belum Masuk'}
-                                    </Text>
-                                </View>
-                            </LinearGradient>
+                {/* SINGLE ACTION BUTTON */}
+                <View style={styles.actionContainer}>
+                    {statusLoading ? (
+                        <View style={[styles.btnShadowContainer, { justifyContent: 'center', alignItems: 'center', height: 80, backgroundColor: '#F1F5F9' }]}>
+                            <ActivityIndicator size="small" color="#94A3B8" />
+                            <Text style={{ marginTop: 8, fontSize: 12, color: '#64748B' }}>Memeriksa Status...</Text>
                         </View>
-                    </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity
+                            style={[
+                                styles.btnShadowContainer,
+                                (loading || !location || (hasCheckedOutToday && !activeEvent)) && styles.disabledBtn
+                            ]}
+                            onPress={() => {
+                                if (hasCheckedOutToday) {
+                                    Alert.alert("Selesai", "Anda sudah menyelesaikan absensi hari ini.");
+                                    return;
+                                }
+                                handleSubmit(todayCheckIn ? 'CHECK_OUT' : 'CHECK_IN');
+                            }}
+                            disabled={loading || !location || (hasCheckedOutToday && !activeEvent)}
+                            activeOpacity={0.9}
+                        >
+                            <View style={styles.btnOverflow}>
+                                <LinearGradient
+                                    colors={
+                                        hasCheckedOutToday ? ['#64748B', '#475569'] :
+                                            todayCheckIn ? ['#1E293B', '#0F172A'] : // Dark/Navy for Checkout
+                                                ['#DC2626', '#B91C1C'] // Red for Checkin
+                                    }
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                    style={[styles.actionBtnGradient, { justifyContent: 'center', paddingVertical: 0 }]}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                        <View style={[styles.iconCircleWhite, {
+                                            backgroundColor: 'rgba(255,255,255,0.2)',
+                                            width: 56, height: 56, borderRadius: 28
+                                        }]}>
+                                            <MaterialCommunityIcons
+                                                name={hasCheckedOutToday ? "check-all" : todayCheckIn ? "logout" : "login"}
+                                                size={28}
+                                                color="#FFF"
+                                            />
+                                        </View>
+                                        <View>
+                                            <Text style={{ fontSize: 20, fontWeight: '800', color: 'white', letterSpacing: 0.5 }}>
+                                                {hasCheckedOutToday ? 'SELESAI HARI INI' : todayCheckIn ? 'ABSEN PULANG' : 'ABSEN MASUK'}
+                                            </Text>
+                                            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: '500' }}>
+                                                {hasCheckedOutToday ? 'Sampai jumpa besok!' : todayCheckIn ? 'Tekan untuk mengakhiri shift' : 'Tekan untuk memulai shift'}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </LinearGradient>
+                            </View>
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 <View style={{ height: 40 }} />
@@ -699,6 +890,22 @@ export default function AttendanceInputScreen() {
                         <Text style={{ fontSize: 12, color: '#666', marginTop: 5, marginBottom: 10 }}>
                             Jika TIDAK, silakan tekan tombol "Tidak, Hanya Pulang".
                         </Text>
+
+                        {availableEvents.length > 0 && (
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                                {availableEvents.map((evt: any, idx: number) => (
+                                    <Chip
+                                        key={idx}
+                                        selected={overtimeReason === evt.name}
+                                        onPress={() => setOvertimeReason(evt.name)}
+                                        mode="outlined"
+                                        style={{ marginBottom: 4 }}
+                                    >
+                                        {evt.name}
+                                    </Chip>
+                                ))}
+                            </View>
+                        )}
 
                         <TextInput
                             label="Alasan Lembur / Nama Event"

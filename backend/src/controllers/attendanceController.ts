@@ -337,20 +337,49 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: 'Anda sudah melakukan Check-out hari ini. Data tidak dapat diubah.' });
         }
 
-        // Validation: Must Have Checked-In Today (Jakarta Time)
+        // Validation: Must Have Checked-In Recently (Last 24 Hours)
+        // This supports Overnight Shifts (e.g. CheckIn 22:00 Yesterday, CheckOut 06:00 Today)
+        const yesterdayStart = new Date(todayStart);
+        yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+
         const existingCheckIn = await Attendance.findOne({
             where: {
                 userId,
                 type: AttendanceType.CHECK_IN,
                 timestamp: {
-                    [Op.gte]: todayStart,
+                    [Op.gte]: yesterdayStart,  // Look back 24h+ (actually 48h window here to be safe and filter later)
                     [Op.lte]: todayEnd
+                }
+            },
+            order: [['timestamp', 'DESC']] // Get the LATEST one
+        });
+
+        if (!existingCheckIn) {
+            return res.status(400).json({ message: 'Anda belum melakukan Absensi Masuk (dalam 24 jam terakhir).' });
+        }
+
+        // Verify it's not stale (> 24 hours ago)
+        const activeCheckInTime = new Date(existingCheckIn.timestamp).getTime();
+        if (now.getTime() - activeCheckInTime > 24 * 60 * 60 * 1000) {
+            return res.status(400).json({ message: 'Sesi Absensi kadaluarsa (> 24 jam). Silakan Check-In ulang.' });
+        }
+
+        // Check if this specific CheckIn already has a Checkout paired?
+        // Since we use Event Sourcing (separate rows), we need to ensure no CheckOut exists AFTER this CheckIn
+        const pairCheckout = await Attendance.findOne({
+            where: {
+                userId,
+                type: AttendanceType.CHECK_OUT,
+                timestamp: {
+                    [Op.gt]: existingCheckIn.timestamp
                 }
             }
         });
 
-        if (!existingCheckIn) {
-            return res.status(400).json({ message: 'Anda belum melakukan Absensi Masuk hari ini.' });
+        if (pairCheckout) {
+            // If we found a checkout AFTER the latest checkin, it means the session is closed.
+            // Unless the user is trying to overwrite? No.
+            return res.status(400).json({ message: 'Anda sudah Check-out untuk sesi ini.' });
         }
 
         // --- SMART SHIFT DETECTION FOR OVERTIME ---
@@ -465,6 +494,7 @@ export const getCalendar = async (req: AuthRequest, res: Response) => {
 
         // Group by Date to merge CheckIn and CheckOut
         const dailyMap = new Map<string, any>();
+        let lastOpenSessionDate: string | null = null;
 
         attendances.forEach(att => {
             const date = new Date(att.timestamp);
@@ -492,35 +522,64 @@ export const getCalendar = async (req: AuthRequest, res: Response) => {
                 });
             }
 
-            const record = dailyMap.get(dateStr);
+            const currentRecord = dailyMap.get(dateStr);
 
             if (att.type === AttendanceType.CHECK_IN) {
-                record.checkInTime = timeStr;
-                record.time = timeStr; // Keep 'time' for backward compatibility (CheckIn Time)
-                record.status = att.isLate ? 'late' : 'onTime';
-                record.isLate = att.isLate;
-                record.isHalfDay = att.isHalfDay;
-                record.type = 'CHECK_IN';
+                currentRecord.checkInTime = timeStr;
+                currentRecord.time = timeStr; // Keep 'time' for backward compatibility (CheckIn Time)
+                currentRecord.status = att.isLate ? 'late' : 'onTime';
+                currentRecord.isLate = att.isLate;
+                currentRecord.isHalfDay = att.isHalfDay;
+                currentRecord.type = 'CHECK_IN';
                 // Priority notes
-                if (att.notes) record.notes = att.notes;
-                if (!record.notes) record.notes = att.isLate ? 'Terlambat' : 'Tepat Waktu';
+                if (att.notes) currentRecord.notes = att.notes;
+                if (!currentRecord.notes) currentRecord.notes = att.isLate ? 'Terlambat' : 'Tepat Waktu';
+
+                // Track this as open session
+                lastOpenSessionDate = dateStr;
 
             } else if (att.type === AttendanceType.CHECK_OUT) {
-                record.checkOutTime = timeStr;
-                // Append checkout note if exists and not redundant
-                if (att.notes && !record.notes.includes(att.notes)) {
-                    // record.notes += ` | ${att.notes}`; // Optional: Don't clutter notes
+                // Logic to pair with previous day if today has no CheckIn
+                if (currentRecord.checkInTime) {
+                    // Normal Case: CheckOut Same Day
+                    currentRecord.checkOutTime = timeStr;
+                    // Append note if needed
+                    if (att.notes && !currentRecord.notes.includes(att.notes)) {
+                        // currentRecord.notes += ` | ${att.notes}`;
+                    }
+                    lastOpenSessionDate = null; // Session Closed
+
+                } else {
+                    // Orphan CheckOut on this day? Check if belongs to previous day
+                    if (lastOpenSessionDate && dailyMap.has(lastOpenSessionDate)) {
+                        const prevRecord = dailyMap.get(lastOpenSessionDate);
+
+                        // Verify previous record is indeed incomplete
+                        if (!prevRecord.checkOutTime) {
+                            prevRecord.checkOutTime = timeStr + ' (+1)'; // Mark as next day
+                            lastOpenSessionDate = null; // Session Closed
+                            return; // SKIP adding to current day's map (so it doesn't show as error today)
+                        }
+                    }
+
+                    // Fallback: Genuine Orphan CheckOut (mistake or forgot checkin)
+                    currentRecord.checkOutTime = timeStr;
+                    // Append checkout note if exists and not redundant
+                    if (att.notes && !currentRecord.notes.includes(att.notes)) {
+                        // record.notes += ` | ${att.notes}`; // Optional: Don't clutter notes
+                    }
                 }
+
             } else if (att.type === AttendanceType.PERMIT) {
-                record.status = 'off';
-                record.time = '-';
-                record.type = 'PERMIT';
-                if (!record.notes) record.notes = att.notes || 'Izin';
+                currentRecord.status = 'off';
+                currentRecord.time = '-';
+                currentRecord.type = 'PERMIT';
+                if (!currentRecord.notes) currentRecord.notes = att.notes || 'Izin';
             } else if (att.type === AttendanceType.SICK) {
-                record.status = 'off';
-                record.time = '-';
-                record.type = 'SICK';
-                if (!record.notes) record.notes = att.notes || 'Sakit';
+                currentRecord.status = 'off';
+                currentRecord.time = '-';
+                currentRecord.type = 'SICK';
+                if (!currentRecord.notes) currentRecord.notes = att.notes || 'Sakit';
             }
         });
 
