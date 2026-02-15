@@ -27,7 +27,9 @@ export const verifyPlayIntegrity = async (integrityToken: string, clientNonce: s
     try {
         const res = await playIntegrity.v1.decodeIntegrityToken({
             packageName: PACKAGE_NAME,
-            integrityToken: integrityToken,
+            requestBody: {
+                integrityToken: integrityToken,
+            },
         });
 
         const tokenPayload = res.data.tokenPayloadExternal;
@@ -67,12 +69,7 @@ export const verifyPlayIntegrity = async (integrityToken: string, clientNonce: s
         if (appIntegrity?.packageName !== PACKAGE_NAME) {
             block(`Package Name Mismatch: ${appIntegrity?.packageName}`);
         }
-        if (appIntegrity?.versionRecognitionVerdict === 'UNRECOGNIZED_VERSION') {
-            // User didn't explicitly say BLOCK for this, but "appIntegrity != PLAY_RECOGNIZED" covers the verdict.
-            // However, version being unrecognized might just mean a new build. 
-            // STrictly following rule: "BLOCK if appIntegrity != PLAY_RECOGNIZED". 
-            // appRecognitionVerdict is the field.
-        }
+
 
         // 3. Validate Licensing
         if (accountDetails?.appLicensingVerdict !== 'LICENSED') {
