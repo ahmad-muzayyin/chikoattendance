@@ -2,8 +2,8 @@
   "expo": {
     "name": "Chiko Absensi",
     "slug": "chiko-attendance",
-    "scheme": "id.chiko.attendance",
-    "version": "1.0.0",
+    "scheme": "id.chiko.absensi",
+    "version": "1.0.1",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -16,14 +16,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "id.chiko.attendance",
+      "bundleIdentifier": "id.chiko.absensi",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "id.chiko.attendance",
-      "versionCode": 5,
+      "package": "id.chiko.absensi",
+      "versionCode": 6,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#EC1616"
@@ -58,7 +58,12 @@
             "compileSdkVersion": 35,
             "targetSdkVersion": 35,
             "buildToolsVersion": "35.0.0",
-            "ndkVersion": "26.1.10909125"
+            "ndkVersion": "28.0.12674087",
+            "packagingOptions": {
+              "jniLibs": {
+                "useLegacyPackaging": false
+              }
+            }
           }
         }
       ],

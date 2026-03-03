@@ -4,5 +4,6 @@ dist
 web-build
 .env
 google-services.json
-*.jks
+# *.jks
+!upload_key_reset.jks
 *.keystore

@@ -16,8 +16,8 @@ Sebelum melakukan pull di server, pastikan kode terbaru sudah **di-upload (push)
 ## 2. Masuk ke Server (SSH)
 Gunakan terminal (PowerShell/CMD/Git Bash) untuk masuk ke server Anda.
 ```bash
-ssh root@IP_ADDRESS_SERVER
-# Contoh: ssh root@103.150.10.20
+ssh root@157.15.40.27 -p 3176
+# Contoh: ssh root@157.15.40.27 -p 3176
 ```
 *Masukkan password jika diminta.*
 

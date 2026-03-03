@@ -5,8 +5,8 @@ Berikut adalah langkah-langkah untuk mengupdate server dengan fitur baru (Export
 ## 1. Login ke Server via SSH
 Buka terminal (CMD/PowerShell) dan login ke server Anda:
 ```bash
-ssh username@34.126.121.250
-# Masukkan password jika diminta
+ssh root@157.15.40.27 -p 3176
+# Masukkan password: @amuy6u7
 ```
 *(Ganti `username` dengan user server Anda, misal `root` atau `admin`)*
 
