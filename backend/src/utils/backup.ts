@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import cron from 'node-cron';
 import dotenv from 'dotenv';
+import axios from 'axios';
 
 dotenv.config();
 
@@ -12,6 +13,25 @@ const backupDir = path.join(__dirname, '../../backups');
 if (!fs.existsSync(backupDir)) {
     fs.mkdirSync(backupDir, { recursive: true });
 }
+
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzU27ZsKfl5hT5EUqMl3RP2HzfSV7VTtus0Z3RWkscDrE7IlIsF8dc4-wCpO6E29p48/exec';
+
+const uploadToGDrive = async (filePath: string, fileName: string) => {
+    try {
+        console.log(`[Backup] Uploading ${fileName} to Google Drive via GAS...`);
+        const fileData = fs.readFileSync(filePath, { encoding: 'base64' });
+
+        const response = await axios.post(GAS_URL, {
+            fileName: fileName,
+            mimeType: 'application/sql',
+            fileData: fileData
+        });
+
+        console.log('[Backup] GAS Response:', response.data);
+    } catch (error: any) {
+        console.error('[Backup] Failed to upload to Google Drive:', error.message);
+    }
+};
 
 export const runBackup = (): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -71,7 +91,11 @@ export const initAutoBackup = () => {
             }
 
             console.log('[Backup] Running scheduled weekly backup...');
-            await runBackup();
+            const fileName = await runBackup();
+            const filePath = path.join(backupDir, fileName);
+
+            // Upload to Google Drive via GAS
+            await uploadToGDrive(filePath, fileName);
 
             // Clean up old backups (keep last 30 days)
             cleanOldBackups(30);

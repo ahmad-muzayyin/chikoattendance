@@ -9,6 +9,7 @@
     "seed": "ts-node-dev src/seed.ts"
   },
   "dependencies": {
+    "axios": "^1.6.2",
     "bcrypt": "^5.1.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
