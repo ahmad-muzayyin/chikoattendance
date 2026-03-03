@@ -3,7 +3,7 @@
     "name": "Chiko Absensi",
     "slug": "chiko-attendance",
     "scheme": "id.chiko.absensi",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -23,7 +23,7 @@
     },
     "android": {
       "package": "id.chiko.absensi",
-      "versionCode": 6,
+      "versionCode": 7,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#EC1616"
