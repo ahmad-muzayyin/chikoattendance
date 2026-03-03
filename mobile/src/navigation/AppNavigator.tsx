@@ -34,6 +34,9 @@ import OwnerRecapEmployeesScreen from '../screens/OwnerRecapEmployeesScreen';
 import OwnerRecapDetailScreen from '../screens/OwnerRecapDetailScreen';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
 import EventManagementScreen from '../screens/EventManagementScreen';
+import ShiftListScreen from '../screens/ShiftListScreen';
+import LeaveRequestScreen from '../screens/LeaveRequestScreen';
+import LeaveManagementScreen from '../screens/LeaveManagementScreen';
 
 export type RootStackParamList = {
     Loading: undefined;
@@ -58,6 +61,9 @@ export type RootStackParamList = {
     Leaderboard: undefined;
     PositionList: undefined;
     EventManagement: undefined;
+    ShiftList: undefined;
+    LeaveRequest: undefined;
+    LeaveManagement: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -184,6 +190,7 @@ export default function AppNavigator() {
                         <Stack.Screen name="AddBranch" component={AddBranchScreen} options={{ headerShown: true, title: 'Pengaturan Outlet' }} />
                         <Stack.Screen name="UserList" component={UserListScreen} options={{ headerShown: true, title: 'Manajemen Pengguna' }} />
                         <Stack.Screen name="PositionList" component={PositionListScreen} options={{ headerShown: true, title: 'Manajemen Posisi' }} />
+                        <Stack.Screen name="ShiftList" component={ShiftListScreen} options={{ headerShown: true, title: 'Manajemen Shift' }} />
                         <Stack.Screen name="UserForm" component={UserFormScreen} options={{ headerShown: true, title: 'Form Pengguna' }} />
                         <Stack.Screen name="EmployeeList" component={EmployeeListScreen} options={{ headerShown: true, title: 'Monitoring Karyawan' }} />
                         <Stack.Screen name="EmployeeDetail" component={EmployeeDetailScreen} options={{ headerShown: true, title: 'Laporan Kehadiran' }} />
@@ -206,6 +213,8 @@ export default function AppNavigator() {
                         <Stack.Screen name="Points" component={PointsScreen} options={{ headerShown: true, title: 'Poin & Sanksi' }} />
                         <Stack.Screen name="BackupManagement" component={BackupManagementScreen} options={{ headerShown: true, title: 'Pencadangan Data' }} />
                         <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ headerShown: false }} />
+                        <Stack.Screen name="LeaveRequest" component={LeaveRequestScreen} options={{ headerShown: true, title: 'Ajukan Cuti/Izin' }} />
+                        <Stack.Screen name="LeaveManagement" component={LeaveManagementScreen} options={{ headerShown: false }} />
                     </Stack.Navigator>
                 </NavigationContainer>
             </PaperProvider>

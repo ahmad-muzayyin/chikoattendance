@@ -13,8 +13,10 @@ import positionRoutes from './routes/positionRoutes';
 import eventRoutes from './routes/eventRoutes'; // Import Event Routes
 import reportRoutes from './routes/reportRoutes'; // Import Report Routes
 import integrityRoutes from './routes/integrityRoutes'; // Import Integrity Routes
+import leaveRoutes from './routes/leaveRoutes'; // Import Leave Routes
 import { connectDB } from './config/db';
 import { User, UserRole } from './models/User';
+import { LeaveRequest } from './models/LeaveRequest'; // Import LeaveRequest Model
 import { Event } from './models/Event'; // Import Event Model
 import { initAutoBackup } from './utils/backup';
 
@@ -44,6 +46,7 @@ app.use('/api/positions', positionRoutes);
 app.use('/api/events', eventRoutes); // Register Event Routes
 app.use('/api/reports', reportRoutes); // Register Report Routes
 app.use('/api/integrity', integrityRoutes); // Register Integrity Routes
+app.use('/api/leaves', leaveRoutes); // Register Leave Routes
 
 // Test endpoint
 app.get('/api/ping', (req, res) => {
@@ -59,6 +62,12 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // Start Server
 const startServer = async () => {
     await connectDB();
+
+    // Ensure LeaveRequest table exists
+    try {
+        await LeaveRequest.sync({ alter: true });
+        console.log('✅ LeaveRequest model synced');
+    } catch (e) { console.error('LeaveRequest sync error', e); }
 
     // Seed default positions
     try {

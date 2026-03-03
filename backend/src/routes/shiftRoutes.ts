@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/authMiddleware';
-import { getShifts, createShift } from '../controllers/shiftController';
+import { getShifts, createShift, updateShift, deleteShift } from '../controllers/shiftController';
 
 const router = Router();
 
 router.use(authenticateToken);
 router.get('/', getShifts);
-router.post('/', createShift); // Optional: if we want to add UI to create shifts later
+router.post('/', createShift);
+router.put('/:id', updateShift);
+router.delete('/:id', deleteShift);
 
 export default router;

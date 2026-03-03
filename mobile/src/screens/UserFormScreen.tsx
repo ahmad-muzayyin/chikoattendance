@@ -517,6 +517,13 @@ export default function UserFormScreen() {
                         </View>
 
                         <View style={styles.modalContent}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                <Text style={styles.sectionLabel}>Pilih shift:</Text>
+                                <Button mode="text" compact onPress={() => { setShowShiftDialog(false); navigation.navigate('ShiftList' as never); }}>
+                                    Kelola / Edit
+                                </Button>
+                            </View>
+
                             <ScrollView style={styles.radioScrollView} showsVerticalScrollIndicator={false}>
                                 <CustomRadioButton
                                     options={[

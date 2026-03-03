@@ -451,3 +451,49 @@ export const deleteUser = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+export const getUserDetail = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        console.log(`📡 GET User Detail for id: [${id}] (type: ${typeof id})`);
+        const user = await User.findByPk(id, {
+            attributes: ['id', 'name', 'email', 'role', 'branchId', 'shiftId', 'profile_picture', 'position'],
+            include: [
+                { model: Branch, attributes: ['id', 'name'] },
+                { model: Shift, attributes: ['id', 'name', 'startHour', 'endHour'] }
+            ]
+        });
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.json(user);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const getUserPoints = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const Punishment = require('../models/Punishment').default;
+
+        const punishments = await Punishment.findAll({
+            where: { userId: id },
+            order: [['date', 'DESC']],
+            limit: 20
+        });
+
+        const totalPoints = punishments.reduce((sum: number, p: any) => sum + p.points, 0);
+
+        res.json({
+            totalPoints,
+            punishments
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};

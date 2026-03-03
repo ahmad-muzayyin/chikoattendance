@@ -26,6 +26,7 @@ export default function RecapDetailScreen() {
 
     const [loading, setLoading] = useState(true);
     const [history, setHistory] = useState<HistoryItem[]>([]);
+    const [visibleCount, setVisibleCount] = useState(7);
     const [photoModal, setPhotoModal] = useState<{ visible: boolean, photoUrl: string | null, data: any }>({
         visible: false,
         photoUrl: null,
@@ -37,6 +38,8 @@ export default function RecapDetailScreen() {
     }, []);
 
     const fetchHistory = async () => {
+        setLoading(true);
+        setVisibleCount(7);
         try {
             const token = await SecureStore.getItemAsync('authToken');
             const res = await axios.get(`${API_CONFIG.BASE_URL}${ENDPOINTS.HISTORY}`, {
@@ -84,227 +87,239 @@ export default function RecapDetailScreen() {
                             <Text style={styles.emptyText}>Tidak ada data absensi.</Text>
                         </View>
                     ) : (
-                        history.map((item, index) => {
-                            // Deteksi berbagai status
-                            const hasCheckOutOnly = !item.checkIn && item.checkOut;
+                        <>
+                            {history.slice(0, visibleCount).map((item, index) => {
+                                // Deteksi berbagai status
+                                const hasCheckOutOnly = !item.checkIn && item.checkOut;
 
-                            // Cek apakah check-out adalah Alpha marker (jam 23:55)
-                            let isAlphaCheckout = false;
-                            if (hasCheckOutOnly && item.checkOut) {
-                                const checkOutTime = new Date(item.checkOut.timestamp);
-                                const hours = checkOutTime.getHours();
-                                const minutes = checkOutTime.getMinutes();
-                                isAlphaCheckout = (hours === 23 && minutes === 55);
-                            }
+                                // Cek apakah check-out adalah Alpha marker (jam 23:55)
+                                let isAlphaCheckout = false;
+                                if (hasCheckOutOnly && item.checkOut) {
+                                    const checkOutTime = new Date(item.checkOut.timestamp);
+                                    const hours = checkOutTime.getHours();
+                                    const minutes = checkOutTime.getMinutes();
+                                    isAlphaCheckout = (hours === 23 && minutes === 55);
+                                }
 
-                            const hasCheckInOnly = item.checkIn && !item.checkOut;
-                            const hasOvertime = item.checkOut?.isOvertime;
-                            const hasHalfDay = item.checkOut?.isHalfDay;
+                                const hasCheckInOnly = item.checkIn && !item.checkOut;
+                                const hasOvertime = item.checkOut?.isOvertime;
+                                const hasHalfDay = item.checkOut?.isHalfDay;
 
-                            // Cek events untuk ALPHA, PERMIT, SICK
-                            const alphaEvent = item.events?.find((e: any) => e.type === 'ALPHA');
-                            const permitEvent = item.events?.find((e: any) => e.type === 'PERMIT');
-                            const sickEvent = item.events?.find((e: any) => e.type === 'SICK');
+                                // Cek events untuk ALPHA, PERMIT, SICK
+                                const alphaEvent = item.events?.find((e: any) => e.type === 'ALPHA');
+                                const permitEvent = item.events?.find((e: any) => e.type === 'PERMIT');
+                                const sickEvent = item.events?.find((e: any) => e.type === 'SICK');
 
-                            return (
-                                <Surface key={index} style={styles.card} elevation={1}>
-                                    <View style={styles.cardHeader}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            <MaterialCommunityIcons name="calendar-today" size={20} color={colors.primary} />
-                                            <Text style={styles.dateText}>{formatDate(item.date)}</Text>
+                                return (
+                                    <Surface key={index} style={styles.card} elevation={1}>
+                                        <View style={styles.cardHeader}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                <MaterialCommunityIcons name="calendar-today" size={20} color={colors.primary} />
+                                                <Text style={styles.dateText}>{formatDate(item.date)}</Text>
+                                            </View>
+                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                                {item.checkIn?.isLate && (
+                                                    <View style={styles.lateBadge}>
+                                                        <Text style={styles.lateText}>🔔 Terlambat</Text>
+                                                    </View>
+                                                )}
+                                                {hasOvertime && (
+                                                    <View style={[styles.overtimeBadge, { marginLeft: 6, marginTop: 4 }]}>
+                                                        <Text style={styles.overtimeText}>⏰ Lembur</Text>
+                                                    </View>
+                                                )}
+                                                {hasHalfDay && (
+                                                    <View style={[styles.halfDayBadge, { marginLeft: 6, marginTop: 4 }]}>
+                                                        <Text style={styles.halfDayText}>⚠️ Pulang Duluan</Text>
+                                                    </View>
+                                                )}
+                                                {hasCheckOutOnly && !isAlphaCheckout && (
+                                                    <View style={[styles.warningBadge, { marginLeft: 6, marginTop: 4 }]}>
+                                                        <Text style={styles.warningText}>🚫 Data Tidak Valid</Text>
+                                                    </View>
+                                                )}
+                                                {isAlphaCheckout && (
+                                                    <View style={[styles.alphaBadge, { marginLeft: 6, marginTop: 4 }]}>
+                                                        <Text style={styles.alphaText}>🔴 Alpha (Sistem)</Text>
+                                                    </View>
+                                                )}
+                                                {alphaEvent && (
+                                                    <View style={[styles.alphaBadge, { marginLeft: 6, marginTop: 4 }]}>
+                                                        <Text style={styles.alphaText}>🔴 Alpha</Text>
+                                                    </View>
+                                                )}
+                                                {permitEvent && (
+                                                    <View style={[styles.permitBadge, { marginLeft: 6, marginTop: 4 }]}>
+                                                        <Text style={styles.permitText}>🟡 Izin</Text>
+                                                    </View>
+                                                )}
+                                                {sickEvent && (
+                                                    <View style={[styles.sickBadge, { marginLeft: 6, marginTop: 4 }]}>
+                                                        <Text style={styles.sickText}>🟢 Sakit</Text>
+                                                    </View>
+                                                )}
+                                            </View>
                                         </View>
-                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                                            {item.checkIn?.isLate && (
-                                                <View style={styles.lateBadge}>
-                                                    <Text style={styles.lateText}>🔔 Terlambat</Text>
-                                                </View>
-                                            )}
-                                            {hasOvertime && (
-                                                <View style={[styles.overtimeBadge, { marginLeft: 6, marginTop: 4 }]}>
-                                                    <Text style={styles.overtimeText}>⏰ Lembur</Text>
-                                                </View>
-                                            )}
-                                            {hasHalfDay && (
-                                                <View style={[styles.halfDayBadge, { marginLeft: 6, marginTop: 4 }]}>
-                                                    <Text style={styles.halfDayText}>⚠️ Pulang Duluan</Text>
-                                                </View>
-                                            )}
-                                            {hasCheckOutOnly && !isAlphaCheckout && (
-                                                <View style={[styles.warningBadge, { marginLeft: 6, marginTop: 4 }]}>
-                                                    <Text style={styles.warningText}>🚫 Data Tidak Valid</Text>
-                                                </View>
-                                            )}
-                                            {isAlphaCheckout && (
-                                                <View style={[styles.alphaBadge, { marginLeft: 6, marginTop: 4 }]}>
-                                                    <Text style={styles.alphaText}>🔴 Alpha (Sistem)</Text>
-                                                </View>
-                                            )}
-                                            {alphaEvent && (
-                                                <View style={[styles.alphaBadge, { marginLeft: 6, marginTop: 4 }]}>
-                                                    <Text style={styles.alphaText}>🔴 Alpha</Text>
-                                                </View>
-                                            )}
-                                            {permitEvent && (
-                                                <View style={[styles.permitBadge, { marginLeft: 6, marginTop: 4 }]}>
-                                                    <Text style={styles.permitText}>🟡 Izin</Text>
-                                                </View>
-                                            )}
-                                            {sickEvent && (
-                                                <View style={[styles.sickBadge, { marginLeft: 6, marginTop: 4 }]}>
-                                                    <Text style={styles.sickText}>🟢 Sakit</Text>
-                                                </View>
-                                            )}
-                                        </View>
-                                    </View>
 
-                                    <Divider style={styles.divider} />
+                                        <Divider style={styles.divider} />
 
-                                    {/* Keterangan untuk berbagai status */}
-                                    {isAlphaCheckout && (
-                                        <View style={[styles.infoBanner, { backgroundColor: '#FEE2E2' }]}>
-                                            <MaterialCommunityIcons name="alert-circle" size={16} color={colors.error} />
-                                            <Text style={[styles.infoText, { color: colors.error }]}>
-                                                Tidak absen sama sekali dalam sehari. Status ditandai otomatis oleh sistem pada jam 23:55.
-                                            </Text>
-                                        </View>
-                                    )}
-
-                                    {hasCheckOutOnly && !isAlphaCheckout && (
-                                        <View style={styles.infoBanner}>
-                                            <MaterialCommunityIcons name="alert-circle-outline" size={16} color={colors.error} />
-                                            <Text style={styles.infoText}>
-                                                Data tidak valid: Tercatat absen pulang tanpa absen masuk. Kemungkinan error sistem atau manipulasi data.
-                                            </Text>
-                                        </View>
-                                    )}
-
-                                    {alphaEvent && (
-                                        <View style={[styles.infoBanner, { backgroundColor: '#FEE2E2' }]}>
-                                            <MaterialCommunityIcons name="alert-circle" size={16} color={colors.error} />
-                                            <Text style={[styles.infoText, { color: colors.error }]}>
-                                                Tidak absen sama sekali dalam sehari. Status ditandai otomatis oleh sistem pada jam 23:55.
-                                            </Text>
-                                        </View>
-                                    )}
-
-                                    {permitEvent && (
-                                        <View style={[styles.infoBanner, { backgroundColor: '#FEF3C7' }]}>
-                                            <MaterialCommunityIcons name="file-document-outline" size={16} color={colors.warning} />
-                                            <Text style={[styles.infoText, { color: colors.warning }]}>
-                                                Izin disetujui oleh HRD/Owner. {permitEvent.notes ? `Alasan: ${permitEvent.notes}` : ''}
-                                            </Text>
-                                        </View>
-                                    )}
-
-                                    {sickEvent && (
-                                        <View style={[styles.infoBanner, { backgroundColor: '#D1FAE5' }]}>
-                                            <MaterialCommunityIcons name="medical-bag" size={16} color="#059669" />
-                                            <Text style={[styles.infoText, { color: '#059669' }]}>
-                                                Sakit disetujui oleh HRD/Owner. {sickEvent.notes ? `Keterangan: ${sickEvent.notes}` : ''}
-                                            </Text>
-                                        </View>
-                                    )}
-
-                                    {hasOvertime && !hasCheckOutOnly && (
-                                        <View style={[styles.infoBanner, { backgroundColor: '#D1FAE5' }]}>
-                                            <MaterialCommunityIcons name="clock-alert-outline" size={16} color="#059669" />
-                                            <Text style={[styles.infoText, { color: '#059669' }]}>
-                                                Check-out setelah jam kerja normal selesai. Terhitung lembur.
-                                            </Text>
-                                        </View>
-                                    )}
-
-                                    {hasHalfDay && !hasCheckOutOnly && (
-                                        <View style={[styles.infoBanner, { backgroundColor: '#FEF3C7' }]}>
-                                            <MaterialCommunityIcons name="clock-alert-outline" size={16} color={colors.warning} />
-                                            <Text style={[styles.infoText, { color: colors.warning }]}>
-                                                Check-out sebelum jam kerja selesai (durasi kurang dari 8 jam).
-                                            </Text>
-                                        </View>
-                                    )}
-
-                                    <View style={styles.timeRow}>
-                                        <View style={styles.timeItem}>
-                                            <Text style={styles.timeLabel}>Masuk</Text>
-                                            <View style={styles.timeValueContainer}>
-                                                <MaterialCommunityIcons name="login" size={18} color={colors.success} />
-                                                <Text style={[styles.timeValue, !item.checkIn && hasCheckOutOnly && styles.missingData]}>
-                                                    {item.checkIn ? formatTime(item.checkIn.timestamp) : '-'}
+                                        {/* Keterangan untuk berbagai status */}
+                                        {isAlphaCheckout && (
+                                            <View style={[styles.infoBanner, { backgroundColor: '#FEE2E2' }]}>
+                                                <MaterialCommunityIcons name="alert-circle" size={16} color={colors.error} />
+                                                <Text style={[styles.infoText, { color: colors.error }]}>
+                                                    Tidak absen sama sekali dalam sehari. Status ditandai otomatis oleh sistem pada jam 23:55.
                                                 </Text>
                                             </View>
-                                            {item.checkIn?.notes && (
-                                                <Text style={styles.notes} numberOfLines={1}>{item.checkIn.notes}</Text>
-                                            )}
-                                            {!item.checkIn && hasCheckOutOnly && (
-                                                <Text style={styles.missingNote}>✗ Tidak ada data</Text>
-                                            )}
-                                        </View>
+                                        )}
 
-                                        <View style={styles.verticalDivider} />
-
-                                        <View style={styles.timeItem}>
-                                            <Text style={styles.timeLabel}>Pulang</Text>
-                                            <View style={styles.timeValueContainer}>
-                                                <MaterialCommunityIcons name="logout" size={18} color={colors.error} />
-                                                <Text style={styles.timeValue}>
-                                                    {item.checkOut ? formatTime(item.checkOut.timestamp) : '-'}
+                                        {hasCheckOutOnly && !isAlphaCheckout && (
+                                            <View style={styles.infoBanner}>
+                                                <MaterialCommunityIcons name="alert-circle-outline" size={16} color={colors.error} />
+                                                <Text style={styles.infoText}>
+                                                    Data tidak valid: Tercatat absen pulang tanpa absen masuk. Kemungkinan error sistem atau manipulasi data.
                                                 </Text>
                                             </View>
-                                            {item.checkOut?.notes && (
-                                                <Text style={styles.notes} numberOfLines={1}>{item.checkOut.notes}</Text>
-                                            )}
+                                        )}
+
+                                        {alphaEvent && (
+                                            <View style={[styles.infoBanner, { backgroundColor: '#FEE2E2' }]}>
+                                                <MaterialCommunityIcons name="alert-circle" size={16} color={colors.error} />
+                                                <Text style={[styles.infoText, { color: colors.error }]}>
+                                                    Tidak absen sama sekali dalam sehari. Status ditandai otomatis oleh sistem pada jam 23:55.
+                                                </Text>
+                                            </View>
+                                        )}
+
+                                        {permitEvent && (
+                                            <View style={[styles.infoBanner, { backgroundColor: '#FEF3C7' }]}>
+                                                <MaterialCommunityIcons name="file-document-outline" size={16} color={colors.warning} />
+                                                <Text style={[styles.infoText, { color: colors.warning }]}>
+                                                    Izin disetujui oleh HRD/Owner. {permitEvent.notes ? `Alasan: ${permitEvent.notes}` : ''}
+                                                </Text>
+                                            </View>
+                                        )}
+
+                                        {sickEvent && (
+                                            <View style={[styles.infoBanner, { backgroundColor: '#D1FAE5' }]}>
+                                                <MaterialCommunityIcons name="medical-bag" size={16} color="#059669" />
+                                                <Text style={[styles.infoText, { color: '#059669' }]}>
+                                                    Sakit disetujui oleh HRD/Owner. {sickEvent.notes ? `Keterangan: ${sickEvent.notes}` : ''}
+                                                </Text>
+                                            </View>
+                                        )}
+
+                                        {hasOvertime && !hasCheckOutOnly && (
+                                            <View style={[styles.infoBanner, { backgroundColor: '#D1FAE5' }]}>
+                                                <MaterialCommunityIcons name="clock-alert-outline" size={16} color="#059669" />
+                                                <Text style={[styles.infoText, { color: '#059669' }]}>
+                                                    Check-out setelah jam kerja normal selesai. Terhitung lembur.
+                                                </Text>
+                                            </View>
+                                        )}
+
+                                        {hasHalfDay && !hasCheckOutOnly && (
+                                            <View style={[styles.infoBanner, { backgroundColor: '#FEF3C7' }]}>
+                                                <MaterialCommunityIcons name="clock-alert-outline" size={16} color={colors.warning} />
+                                                <Text style={[styles.infoText, { color: colors.warning }]}>
+                                                    Check-out sebelum jam kerja selesai (durasi kurang dari 8 jam).
+                                                </Text>
+                                            </View>
+                                        )}
+
+                                        <View style={styles.timeRow}>
+                                            <View style={styles.timeItem}>
+                                                <Text style={styles.timeLabel}>Masuk</Text>
+                                                <View style={styles.timeValueContainer}>
+                                                    <MaterialCommunityIcons name="login" size={18} color={colors.success} />
+                                                    <Text style={[styles.timeValue, !item.checkIn && hasCheckOutOnly && styles.missingData]}>
+                                                        {item.checkIn ? formatTime(item.checkIn.timestamp) : '-'}
+                                                    </Text>
+                                                </View>
+                                                {item.checkIn?.notes && (
+                                                    <Text style={styles.notes} numberOfLines={1}>{item.checkIn.notes}</Text>
+                                                )}
+                                                {!item.checkIn && hasCheckOutOnly && (
+                                                    <Text style={styles.missingNote}>✗ Tidak ada data</Text>
+                                                )}
+                                            </View>
+
+                                            <View style={styles.verticalDivider} />
+
+                                            <View style={styles.timeItem}>
+                                                <Text style={styles.timeLabel}>Pulang</Text>
+                                                <View style={styles.timeValueContainer}>
+                                                    <MaterialCommunityIcons name="logout" size={18} color={colors.error} />
+                                                    <Text style={styles.timeValue}>
+                                                        {item.checkOut ? formatTime(item.checkOut.timestamp) : '-'}
+                                                    </Text>
+                                                </View>
+                                                {item.checkOut?.notes && (
+                                                    <Text style={styles.notes} numberOfLines={1}>{item.checkOut.notes}</Text>
+                                                )}
+                                            </View>
                                         </View>
-                                    </View>
 
-                                    {/* Photo Buttons */}
-                                    <View style={styles.photoButtonsRow}>
-                                        <TouchableOpacity
-                                            style={[styles.photoButton, { flex: 1, marginRight: 4 }]}
-                                            onPress={() => setPhotoModal({
-                                                visible: true,
-                                                photoUrl: item.checkIn?.photoUrl,
-                                                data: {
-                                                    type: 'CHECK-IN',
-                                                    time: item.checkIn?.timestamp,
-                                                    notes: item.checkIn?.notes
-                                                }
-                                            })}
-                                        >
-                                            <MaterialCommunityIcons
-                                                name={item.checkIn?.photoUrl ? "camera" : "camera-off"}
-                                                size={16}
-                                                color={item.checkIn?.photoUrl ? colors.primary : colors.textMuted}
-                                            />
-                                            <Text style={[styles.photoButtonText, !item.checkIn?.photoUrl && { color: colors.textMuted }]}>
-                                                {item.checkIn ? 'Foto Masuk' : 'Tidak Masuk'}
-                                            </Text>
-                                        </TouchableOpacity>
+                                        {/* Photo Buttons */}
+                                        <View style={styles.photoButtonsRow}>
+                                            <TouchableOpacity
+                                                style={[styles.photoButton, { flex: 1, marginRight: 4 }]}
+                                                onPress={() => setPhotoModal({
+                                                    visible: true,
+                                                    photoUrl: item.checkIn?.photoUrl,
+                                                    data: {
+                                                        type: 'CHECK-IN',
+                                                        time: item.checkIn?.timestamp,
+                                                        notes: item.checkIn?.notes
+                                                    }
+                                                })}
+                                            >
+                                                <MaterialCommunityIcons
+                                                    name={item.checkIn?.photoUrl ? "camera" : "camera-off"}
+                                                    size={16}
+                                                    color={item.checkIn?.photoUrl ? colors.primary : colors.textMuted}
+                                                />
+                                                <Text style={[styles.photoButtonText, !item.checkIn?.photoUrl && { color: colors.textMuted }]}>
+                                                    {item.checkIn ? 'Foto Masuk' : 'Tidak Masuk'}
+                                                </Text>
+                                            </TouchableOpacity>
 
-                                        <TouchableOpacity
-                                            style={[styles.photoButton, { flex: 1, marginLeft: 4 }]}
-                                            onPress={() => setPhotoModal({
-                                                visible: true,
-                                                photoUrl: item.checkOut?.photoUrl,
-                                                data: {
-                                                    type: 'CHECK-OUT',
-                                                    time: item.checkOut?.timestamp,
-                                                    notes: item.checkOut?.notes
-                                                }
-                                            })}
-                                        >
-                                            <MaterialCommunityIcons
-                                                name={item.checkOut?.photoUrl ? "camera" : "camera-off"}
-                                                size={16}
-                                                color={item.checkOut?.photoUrl ? colors.error : colors.textMuted}
-                                            />
-                                            <Text style={[styles.photoButtonText, !item.checkOut?.photoUrl && { color: colors.textMuted }]}>
-                                                {item.checkOut ? 'Foto Pulang' : 'Tidak Pulang'}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </Surface>
-                            );
-                        })
+                                            <TouchableOpacity
+                                                style={[styles.photoButton, { flex: 1, marginLeft: 4 }]}
+                                                onPress={() => setPhotoModal({
+                                                    visible: true,
+                                                    photoUrl: item.checkOut?.photoUrl,
+                                                    data: {
+                                                        type: 'CHECK-OUT',
+                                                        time: item.checkOut?.timestamp,
+                                                        notes: item.checkOut?.notes
+                                                    }
+                                                })}
+                                            >
+                                                <MaterialCommunityIcons
+                                                    name={item.checkOut?.photoUrl ? "camera" : "camera-off"}
+                                                    size={16}
+                                                    color={item.checkOut?.photoUrl ? colors.error : colors.textMuted}
+                                                />
+                                                <Text style={[styles.photoButtonText, !item.checkOut?.photoUrl && { color: colors.textMuted }]}>
+                                                    {item.checkOut ? 'Foto Pulang' : 'Tidak Pulang'}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </Surface>
+                                );
+                            })}
+
+                            {visibleCount < history.length && (
+                                <TouchableOpacity
+                                    style={styles.loadMoreBtn}
+                                    onPress={() => setVisibleCount(history.length)}
+                                >
+                                    <MaterialCommunityIcons name="chevron-double-down" size={24} color={colors.primary} />
+                                    <Text style={styles.loadMoreText}>Tampilkan {history.length - visibleCount} Data Lainnya (Satu Bulan)</Text>
+                                </TouchableOpacity>
+                            )}
+                        </>
                     )}
                 </ScrollView>
             )}
@@ -638,5 +653,24 @@ const styles = StyleSheet.create({
     photoCloseButton: {
         backgroundColor: colors.primary,
         borderRadius: 12,
+    },
+    loadMoreBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+        backgroundColor: colors.surface,
+        borderRadius: 12,
+        marginTop: 8,
+        marginBottom: 24,
+        borderWidth: 1,
+        borderColor: colors.primary,
+        borderStyle: 'dashed',
+    },
+    loadMoreText: {
+        marginLeft: 8,
+        color: colors.primary,
+        fontWeight: 'bold',
+        fontSize: 14,
     },
 });

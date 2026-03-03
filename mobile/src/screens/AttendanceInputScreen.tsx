@@ -672,7 +672,10 @@ export default function AttendanceInputScreen() {
                 {/* Camera View */}
                 <View style={styles.cameraCard}>
                     <View style={styles.cameraHeader}>
-                        <Text style={styles.sectionTitle}>Foto Selfie</Text>
+                        <View>
+                            <Text style={styles.sectionTitle}>Foto Selfie</Text>
+                            <Text style={styles.cameraSubtitle}>Wajah harus terlihat jelas (Tanpa Masker)</Text>
+                        </View>
                         {photo && (
                             <TouchableOpacity onPress={() => setPhoto(null)}>
                                 <Text style={styles.retakeText}>Ambil Ulang</Text>
@@ -1084,8 +1087,13 @@ const styles = StyleSheet.create({
     },
     sectionTitle: {
         fontSize: 16,
-        fontWeight: '700',
-        color: '#1F2937',
+        fontWeight: 'bold',
+        color: colors.textPrimary,
+    },
+    cameraSubtitle: {
+        fontSize: 10,
+        color: colors.textMuted,
+        marginTop: 2,
     },
     retakeText: {
         fontSize: 13,

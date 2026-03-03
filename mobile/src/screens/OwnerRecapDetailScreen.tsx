@@ -1,7 +1,7 @@
 // d:\AHMAD MUZAYYIN\ChikoAttendance\mobile\src\screens\OwnerRecapDetailScreen.tsx
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Dimensions, TouchableOpacity, Image, StatusBar } from 'react-native';
-import { Text, Surface, ActivityIndicator, Button, Portal, Dialog, RadioButton, Modal } from 'react-native-paper';
+import { Text, Surface, ActivityIndicator, Button, Portal, Dialog, RadioButton, Modal, TextInput } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
@@ -20,6 +20,8 @@ export default function OwnerRecapDetailScreen() {
     const route = useRoute<any>();
     const { userId, userName } = route.params;
 
+    console.log('🔍 OwnerRecapDetail -> Params:', { userId, userName, type: typeof userId });
+
     const [attendances, setAttendances] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [month, setMonth] = useState(new Date().getMonth() + 1); // 1-indexed
@@ -28,14 +30,20 @@ export default function OwnerRecapDetailScreen() {
     const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
     const [tempMonth, setTempMonth] = useState(month);
     const [tempYear, setTempYear] = useState(year);
+    const [visibleCount, setVisibleCount] = useState(7);
     const [photoModal, setPhotoModal] = useState<{ visible: boolean, photoUrl: string | null, data: any }>({
         visible: false,
         photoUrl: null,
         data: null
     });
+    const [userProfile, setUserProfile] = useState<any>(null);
+    const [pointsData, setPointsData] = useState<any>(null);
+    const [punishmentModal, setPunishmentModal] = useState({ visible: false, points: '', reason: '' });
+    const [punishmentLoading, setPunishmentLoading] = useState(false);
 
     const fetchAttendance = async () => {
         setLoading(true);
+        setVisibleCount(7);
         try {
             const token = await SecureStore.getItemAsync('authToken');
             const res = await axios.get(`${API_CONFIG.BASE_URL}/admin/attendance/${userId}`, {
@@ -48,8 +56,30 @@ export default function OwnerRecapDetailScreen() {
             } else {
                 setAttendances([]);
             }
-        } catch (error) {
-            console.error('Fetch attendance error:', error);
+
+            // Fetch User Detail for Audit Comparison
+            try {
+                const userRes = await axios.get(`${API_CONFIG.BASE_URL}/admin/users/${userId}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                console.log('✅ User Profile Fetched:', userRes.data?.name);
+                setUserProfile(userRes.data);
+            } catch (err) {
+                console.log('Profile fetch failed - likely endpoint not deployed yet');
+            }
+
+            try {
+                const pointsRes = await axios.get(`${API_CONFIG.BASE_URL}/admin/users/${userId}/points`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                setPointsData(pointsRes.data);
+            } catch (err) {
+                console.log('Points fetch failed - likely endpoint not deployed yet');
+            }
+
+        } catch (error: any) {
+            console.error('❌ Fetch attendance error:', error?.response?.status, error?.response?.data || error.message);
+            console.error('❌ Failed URL:', error?.config?.url);
         } finally {
             setLoading(false);
         }
@@ -74,6 +104,7 @@ export default function OwnerRecapDetailScreen() {
             permitNotes: permitEvent?.notes,
             isSick: !!sickEvent,
             sickNotes: sickEvent?.notes,
+            userId: userId // Ensure we have this for punishment
         };
     }).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -99,6 +130,13 @@ export default function OwnerRecapDetailScreen() {
                     <MaterialCommunityIcons name="chevron-down" size={20} color={colors.textMuted} style={{ marginLeft: 'auto' }} />
                 </TouchableOpacity>
 
+                <TouchableOpacity
+                    style={[styles.exportBtn, { backgroundColor: colors.error }]}
+                    onPress={() => setPunishmentModal({ ...punishmentModal, visible: true })}
+                >
+                    <MaterialCommunityIcons name="alert-decagram-outline" size={22} color="white" />
+                </TouchableOpacity>
+
                 <TouchableOpacity style={styles.exportBtn} onPress={() => console.log('Export')}>
                     <MaterialCommunityIcons name="file-download-outline" size={22} color="white" />
                 </TouchableOpacity>
@@ -108,6 +146,35 @@ export default function OwnerRecapDetailScreen() {
                 contentContainerStyle={styles.scrollContent}
                 refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchAttendance} colors={[colors.primary]} />}
             >
+                {/* User Profile Header */}
+                <Surface style={styles.profileHeaderCard} elevation={1}>
+                    <View style={styles.profileHeaderLeft}>
+                        <View style={[styles.profileAvatar, { backgroundColor: `${colors.primary}15` }]}>
+                            <Text style={styles.profileAvatarText}>{userName?.substring(0, 2).toUpperCase()}</Text>
+                        </View>
+                        <View style={styles.profileInfo}>
+                            <Text style={styles.profileName}>{userName}</Text>
+                            <View style={styles.profileBadgeRow}>
+                                <View style={styles.roleBadge}>
+                                    <Text style={styles.roleBadgeText}>{userProfile?.role || 'Karyawan'}</Text>
+                                </View>
+                                {pointsData !== null && (
+                                    <View style={[styles.pointsBadge, { backgroundColor: pointsData.totalPoints < 0 ? '#FEE2E2' : '#DCFCE7' }]}>
+                                        <Text style={[styles.pointsBadgeText, { color: pointsData.totalPoints < 0 ? colors.error : colors.success }]}>
+                                            {pointsData.totalPoints} Poin
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+                        </View>
+                    </View>
+                    {userProfile?.Position && (
+                        <View style={styles.positionBadge}>
+                            <Text style={styles.positionText}>{userProfile.Position.name}</Text>
+                        </View>
+                    )}
+                </Surface>
+
                 {/* Monthly Summary Chart for Owner */}
                 {!loading && items.length > 0 && (
                     <Surface style={styles.summaryChartCard} elevation={2}>
@@ -183,162 +250,174 @@ export default function OwnerRecapDetailScreen() {
                         <Text style={styles.emptySubtitle}>Tidak ada absensi untuk periode {months[month - 1]} {year}</Text>
                     </View>
                 ) : (
-                    items.map((item: any, index) => {
-                        // Deteksi anomali: Ada check-out tapi tidak ada check-in
-                        const hasCheckOutOnly = !item.checkIn && item.checkOut;
+                    <>
+                        {items.slice(0, visibleCount).map((item: any, index) => {
+                            // Deteksi anomali: Ada check-out tapi tidak ada check-in
+                            const hasCheckOutOnly = !item.checkIn && item.checkOut;
 
-                        // Cek apakah check-out adalah Alpha marker (jam 23:55)
-                        let isAlphaCheckout = false;
-                        if (hasCheckOutOnly && item.checkOut) {
-                            const checkOutTime = new Date(item.checkOut);
-                            const hours = checkOutTime.getHours();
-                            const minutes = checkOutTime.getMinutes();
-                            isAlphaCheckout = (hours === 23 && minutes === 55);
-                        }
+                            // Cek apakah check-out adalah Alpha marker (jam 23:55)
+                            let isAlphaCheckout = false;
+                            if (hasCheckOutOnly && item.checkOut) {
+                                const checkOutTime = new Date(item.checkOut);
+                                const hours = checkOutTime.getHours();
+                                const minutes = checkOutTime.getMinutes();
+                                isAlphaCheckout = (hours === 23 && minutes === 55);
+                            }
 
-                        return (
-                            <Surface key={index} style={styles.itemCard} elevation={1}>
-                                <View style={styles.cardHeader}>
-                                    <View style={styles.dateBadge}>
-                                        <Text style={styles.dateDayText}>{new Date(item.date).getDate()}</Text>
-                                        <Text style={styles.dateMonthText}>{months[new Date(item.date).getMonth()].substring(0, 3)}</Text>
-                                    </View>
-                                    <View style={styles.cardInfo}>
-                                        <Text style={styles.dayText}>
-                                            {new Date(item.date).toLocaleDateString('id-ID', { weekday: 'long' })}
-                                        </Text>
-                                        <Text style={styles.fullDateText}>
-                                            {new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                                        </Text>
-                                    </View>
-                                    <View style={{ flexDirection: 'column', alignItems: 'flex-end' }}>
-                                        {item.isLate && <View style={styles.lateStatus}><Text style={styles.lateStatusText}>TERLAMBAT</Text></View>}
-                                        {hasCheckOutOnly && !item.isAlpha && !item.isPermit && !item.isSick && (
-                                            <View style={[styles.anomalyBadge, { marginTop: item.isLate ? 4 : 0 }]}>
-                                                <Text style={styles.anomalyBadgeText}>🚫 DATA TIDAK VALID</Text>
-                                            </View>
-                                        )}
-                                        {item.isAlpha && (
-                                            <View style={[styles.alphaBadgeOwner, { marginTop: item.isLate ? 4 : 0 }]}>
-                                                <Text style={styles.alphaBadgeOwnerText}>🔴 ALPHA</Text>
-                                            </View>
-                                        )}
-                                        {item.isPermit && (
-                                            <View style={[styles.permitBadge, { marginTop: item.isLate ? 4 : 0 }]}>
-                                                <Text style={styles.permitText}>🟡 IZIN</Text>
-                                            </View>
-                                        )}
-                                        {item.isSick && (
-                                            <View style={[styles.sickBadge, { marginTop: item.isLate ? 4 : 0 }]}>
-                                                <Text style={styles.sickText}>🟢 SAKIT</Text>
-                                            </View>
-                                        )}
-                                    </View>
-                                </View>
-
-                                {/* Alerts */}
-                                {item.isAlpha && (
-                                    <View style={[styles.anomalyAlert, { backgroundColor: '#FEE2E2' }]}>
-                                        <MaterialCommunityIcons name="alert-circle" size={14} color={colors.error} />
-                                        <Text style={styles.anomalyAlertText}>
-                                            Tidak absen. Sistem menandai sebagai Alpha. {item.alphaNotes ? `Catatan: ${item.alphaNotes}` : ''}
-                                        </Text>
-                                    </View>
-                                )}
-
-                                {(item.isPermit || item.isSick) && (
-                                    <View style={[styles.anomalyAlert, { backgroundColor: item.isSick ? '#DCFCE7' : '#FEF3C7' }]}>
-                                        <MaterialCommunityIcons name="file-document-outline" size={14} color={item.isSick ? colors.success : colors.warning} />
-                                        <Text style={[styles.anomalyAlertText, { color: item.isSick ? colors.success : colors.warning }]}>
-                                            {item.isSick ? 'Sakit' : 'Izin'} {item.isSick ? item.sickNotes : item.permitNotes}
-                                        </Text>
-                                    </View>
-                                )}
-
-                                {hasCheckOutOnly && !item.isAlpha && !item.isPermit && !item.isSick && (
-                                    <View style={styles.anomalyAlert}>
-                                        <MaterialCommunityIcons name="alert-octagon" size={14} color={colors.error} />
-                                        <Text style={styles.anomalyAlertText}>
-                                            Data tidak valid: Tercatat absen pulang tanpa absen masuk.
-                                        </Text>
-                                    </View>
-                                )}
-
-                                <View style={styles.cardDivider} />
-
-                                <View style={styles.timeRow}>
-                                    <View style={[styles.timeSlot, { borderRightWidth: 1, borderRightColor: colors.divider }]}>
-                                        <MaterialCommunityIcons name="clock-in" size={18} color={hasCheckOutOnly && !item.isAlpha ? colors.textMuted : colors.success} />
-                                        <View style={{ marginLeft: 10 }}>
-                                            <Text style={styles.slotLabel}>Masuk</Text>
-                                            <Text style={[styles.slotValue, (hasCheckOutOnly || item.isAlpha) && styles.missingValue]}>
-                                                {item.checkInFormatted || (item.checkIn ? new Date(item.checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--')}
-                                            </Text>
-                                            {item.isAlpha && <Text style={styles.missingLabel}>Absen</Text>}
+                            return (
+                                <Surface key={index} style={styles.itemCard} elevation={1}>
+                                    <View style={styles.cardHeader}>
+                                        <View style={styles.dateBadge}>
+                                            <Text style={styles.dateDayText}>{new Date(item.date).getDate()}</Text>
+                                            <Text style={styles.dateMonthText}>{months[new Date(item.date).getMonth()].substring(0, 3)}</Text>
                                         </View>
-                                    </View>
-                                    <View style={styles.timeSlot}>
-                                        <MaterialCommunityIcons name="clock-out" size={18} color={colors.error} />
-                                        <View style={{ marginLeft: 10 }}>
-                                            <Text style={styles.slotLabel}>Pulang</Text>
-                                            <Text style={styles.slotValue}>
-                                                {item.checkOutFormatted || (item.checkOut ? new Date(item.checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--')}
+                                        <View style={styles.cardInfo}>
+                                            <Text style={styles.dayText}>
+                                                {new Date(item.date).toLocaleDateString('id-ID', { weekday: 'long' })}
+                                            </Text>
+                                            <Text style={styles.fullDateText}>
+                                                {new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                                             </Text>
                                         </View>
+                                        <View style={{ flexDirection: 'column', alignItems: 'flex-end' }}>
+                                            {item.isLate && <View style={styles.lateStatus}><Text style={styles.lateStatusText}>TERLAMBAT</Text></View>}
+                                            {hasCheckOutOnly && !item.isAlpha && !item.isPermit && !item.isSick && (
+                                                <View style={[styles.anomalyBadge, { marginTop: item.isLate ? 4 : 0 }]}>
+                                                    <Text style={styles.anomalyBadgeText}>🚫 DATA TIDAK VALID</Text>
+                                                </View>
+                                            )}
+                                            {item.isAlpha && (
+                                                <View style={[styles.alphaBadgeOwner, { marginTop: item.isLate ? 4 : 0 }]}>
+                                                    <Text style={styles.alphaBadgeOwnerText}>🔴 ALPHA</Text>
+                                                </View>
+                                            )}
+                                            {item.isPermit && (
+                                                <View style={[styles.permitBadge, { marginTop: item.isLate ? 4 : 0 }]}>
+                                                    <Text style={styles.permitText}>🟡 IZIN</Text>
+                                                </View>
+                                            )}
+                                            {item.isSick && (
+                                                <View style={[styles.sickBadge, { marginTop: item.isLate ? 4 : 0 }]}>
+                                                    <Text style={styles.sickText}>🟢 SAKIT</Text>
+                                                </View>
+                                            )}
+                                        </View>
                                     </View>
-                                </View>
 
-                                {/* Photo Buttons */}
-                                <View style={styles.photoButtonsRow}>
-                                    <TouchableOpacity
-                                        style={[styles.photoButton, { flex: 1, marginRight: 4 }]}
-                                        onPress={() => setPhotoModal({
-                                            visible: true,
-                                            photoUrl: item.checkInPhoto,
-                                            data: {
-                                                type: 'CHECK-IN',
-                                                time: item.checkIn,
-                                                location: item.checkInLocation,
-                                                notes: item.checkInNotes
-                                            }
-                                        })}
-                                    >
-                                        <MaterialCommunityIcons
-                                            name={item.checkInPhoto ? "camera" : "camera-off"}
-                                            size={16}
-                                            color={item.checkInPhoto ? colors.primary : colors.textMuted}
-                                        />
-                                        <Text style={[styles.photoButtonText, !item.checkInPhoto && { color: colors.textMuted }]}>
-                                            {item.checkIn ? 'Foto Masuk' : 'Tidak Masuk'}
-                                        </Text>
-                                    </TouchableOpacity>
+                                    {/* Alerts */}
+                                    {item.isAlpha && (
+                                        <View style={[styles.anomalyAlert, { backgroundColor: '#FEE2E2' }]}>
+                                            <MaterialCommunityIcons name="alert-circle" size={14} color={colors.error} />
+                                            <Text style={styles.anomalyAlertText}>
+                                                Tidak absen. Sistem menandai sebagai Alpha. {item.alphaNotes ? `Catatan: ${item.alphaNotes}` : ''}
+                                            </Text>
+                                        </View>
+                                    )}
 
-                                    <TouchableOpacity
-                                        style={[styles.photoButton, { flex: 1, marginLeft: 4 }]}
-                                        onPress={() => setPhotoModal({
-                                            visible: true,
-                                            photoUrl: item.checkOutPhoto,
-                                            data: {
-                                                type: 'CHECK-OUT',
-                                                time: item.checkOut,
-                                                location: item.checkOutLocation,
-                                                notes: item.checkOutNotes
-                                            }
-                                        })}
-                                    >
-                                        <MaterialCommunityIcons
-                                            name={item.checkOutPhoto ? "camera" : "camera-off"}
-                                            size={16}
-                                            color={item.checkOutPhoto ? colors.error : colors.textMuted}
-                                        />
-                                        <Text style={[styles.photoButtonText, !item.checkOutPhoto && { color: colors.textMuted }]}>
-                                            {item.checkOut ? 'Foto Pulang' : 'Tidak Pulang'}
-                                        </Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </Surface>
-                        );
-                    })
+                                    {(item.isPermit || item.isSick) && (
+                                        <View style={[styles.anomalyAlert, { backgroundColor: item.isSick ? '#DCFCE7' : '#FEF3C7' }]}>
+                                            <MaterialCommunityIcons name="file-document-outline" size={14} color={item.isSick ? colors.success : colors.warning} />
+                                            <Text style={[styles.anomalyAlertText, { color: item.isSick ? colors.success : colors.warning }]}>
+                                                {item.isSick ? 'Sakit' : 'Izin'} {item.isSick ? item.sickNotes : item.permitNotes}
+                                            </Text>
+                                        </View>
+                                    )}
+
+                                    {hasCheckOutOnly && !item.isAlpha && !item.isPermit && !item.isSick && (
+                                        <View style={styles.anomalyAlert}>
+                                            <MaterialCommunityIcons name="alert-octagon" size={14} color={colors.error} />
+                                            <Text style={styles.anomalyAlertText}>
+                                                Data tidak valid: Tercatat absen pulang tanpa absen masuk.
+                                            </Text>
+                                        </View>
+                                    )}
+
+                                    <View style={styles.cardDivider} />
+
+                                    <View style={styles.timeRow}>
+                                        <View style={[styles.timeSlot, { borderRightWidth: 1, borderRightColor: colors.divider }]}>
+                                            <MaterialCommunityIcons name="clock-in" size={18} color={hasCheckOutOnly && !item.isAlpha ? colors.textMuted : colors.success} />
+                                            <View style={{ marginLeft: 10 }}>
+                                                <Text style={styles.slotLabel}>Masuk</Text>
+                                                <Text style={[styles.slotValue, (hasCheckOutOnly || item.isAlpha) && styles.missingValue]}>
+                                                    {item.checkInFormatted || (item.checkIn ? new Date(item.checkIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--')}
+                                                </Text>
+                                                {item.isAlpha && <Text style={styles.missingLabel}>Absen</Text>}
+                                            </View>
+                                        </View>
+                                        <View style={styles.timeSlot}>
+                                            <MaterialCommunityIcons name="clock-out" size={18} color={colors.error} />
+                                            <View style={{ marginLeft: 10 }}>
+                                                <Text style={styles.slotLabel}>Pulang</Text>
+                                                <Text style={styles.slotValue}>
+                                                    {item.checkOutFormatted || (item.checkOut ? new Date(item.checkOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--')}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </View>
+
+                                    {/* Photo Buttons */}
+                                    <View style={styles.photoButtonsRow}>
+                                        <TouchableOpacity
+                                            style={[styles.photoButton, { flex: 1, marginRight: 4 }]}
+                                            onPress={() => setPhotoModal({
+                                                visible: true,
+                                                photoUrl: item.checkInPhoto,
+                                                data: {
+                                                    type: 'CHECK-IN',
+                                                    time: item.checkIn,
+                                                    location: item.checkInLocation,
+                                                    notes: item.checkInNotes
+                                                }
+                                            })}
+                                        >
+                                            <MaterialCommunityIcons
+                                                name={item.checkInPhoto ? "camera" : "camera-off"}
+                                                size={16}
+                                                color={item.checkInPhoto ? colors.primary : colors.textMuted}
+                                            />
+                                            <Text style={[styles.photoButtonText, !item.checkInPhoto && { color: colors.textMuted }]}>
+                                                {item.checkIn ? 'Foto Masuk' : 'Tidak Masuk'}
+                                            </Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={[styles.photoButton, { flex: 1, marginLeft: 4 }]}
+                                            onPress={() => setPhotoModal({
+                                                visible: true,
+                                                photoUrl: item.checkOutPhoto,
+                                                data: {
+                                                    type: 'CHECK-OUT',
+                                                    time: item.checkOut,
+                                                    location: item.checkOutLocation,
+                                                    notes: item.checkOutNotes
+                                                }
+                                            })}
+                                        >
+                                            <MaterialCommunityIcons
+                                                name={item.checkOutPhoto ? "camera" : "camera-off"}
+                                                size={16}
+                                                color={item.checkOutPhoto ? colors.error : colors.textMuted}
+                                            />
+                                            <Text style={[styles.photoButtonText, !item.checkOutPhoto && { color: colors.textMuted }]}>
+                                                {item.checkOut ? 'Foto Pulang' : 'Tidak Pulang'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </Surface>
+                            );
+                        })}
+
+                        {visibleCount < items.length && (
+                            <TouchableOpacity
+                                style={styles.loadMoreBtn}
+                                onPress={() => setVisibleCount(items.length)}
+                            >
+                                <MaterialCommunityIcons name="chevron-double-down" size={24} color={colors.primary} />
+                                <Text style={styles.loadMoreText}>Tampilkan {items.length - visibleCount} Data Lainnya (Satu Bulan)</Text>
+                            </TouchableOpacity>
+                        )}
+                    </>
                 )}
             </ScrollView>
 
@@ -396,8 +475,35 @@ export default function OwnerRecapDetailScreen() {
                     contentContainerStyle={styles.photoModalContainer}
                 >
                     <View style={styles.photoModalContent}>
-                        {/* Header */}
                         <View style={styles.photoModalHeader}>
+                            <MaterialCommunityIcons name="face-recognition" size={24} color={colors.primary} />
+                            <Text style={styles.photoModalTitle}>Verifikasi Wajah</Text>
+                        </View>
+
+                        <View style={styles.auditContainer}>
+                            {/* Profile Photo (Reference) */}
+                            <View style={styles.auditItem}>
+                                <Text style={styles.auditLabel}>Foto Profil Terdaftar</Text>
+                                {userProfile?.profile_picture ? (
+                                    <Image source={{ uri: userProfile.profile_picture }} style={styles.auditImage} />
+                                ) : (
+                                    <View style={[styles.auditImage, styles.noProfile]}>
+                                        <MaterialCommunityIcons name="account-question" size={40} color={colors.textMuted} />
+                                        <Text style={{ fontSize: 10, color: colors.textMuted }}>Belum Set Foto</Text>
+                                    </View>
+                                )}
+                            </View>
+
+                            <MaterialCommunityIcons name="compare-horizontal" size={24} color={colors.divider} style={{ marginTop: 30 }} />
+
+                            {/* Attendance Photo (Target) */}
+                            <View style={styles.auditItem}>
+                                <Text style={styles.auditLabel}>Foto Saat Absen</Text>
+                                <Image source={{ uri: photoModal.photoUrl || '' }} style={styles.auditImage} />
+                            </View>
+                        </View>
+
+                        <View style={styles.photoDetails}>
                             <View style={[styles.photoTypeBadge, { backgroundColor: photoModal.data?.type === 'CHECK-IN' ? '#DCFCE7' : '#FEF2F2' }]}>
                                 <MaterialCommunityIcons
                                     name={photoModal.data?.type === 'CHECK-IN' ? 'login' : 'logout'}
@@ -408,27 +514,7 @@ export default function OwnerRecapDetailScreen() {
                                     {photoModal.data?.type}
                                 </Text>
                             </View>
-                            <TouchableOpacity onPress={() => setPhotoModal({ visible: false, photoUrl: null, data: null })}>
-                                <MaterialCommunityIcons name="close-circle" size={28} color={colors.textMuted} />
-                            </TouchableOpacity>
-                        </View>
 
-                        {/* Photo */}
-                        {photoModal.photoUrl ? (
-                            <Image
-                                source={{ uri: photoModal.photoUrl }}
-                                style={styles.photoImage}
-                                resizeMode="contain"
-                            />
-                        ) : (
-                            <View style={styles.noPhotoView}>
-                                <MaterialCommunityIcons name="image-off" size={60} color={colors.textMuted} />
-                                <Text style={styles.noPhotoViewText}>Tidak ada foto dilampirkan</Text>
-                            </View>
-                        )}
-
-                        {/* Details */}
-                        <View style={styles.photoDetails}>
                             <View style={styles.photoDetailRow}>
                                 <MaterialCommunityIcons name="clock-outline" size={18} color={colors.textSecondary} />
                                 <Text style={styles.photoDetailLabel}>Waktu:</Text>
@@ -468,6 +554,64 @@ export default function OwnerRecapDetailScreen() {
                         </Button>
                     </View>
                 </Modal>
+
+                {/* Punishment Modal */}
+                <Dialog visible={punishmentModal.visible} onDismiss={() => setPunishmentModal({ ...punishmentModal, visible: false })} style={styles.dialog}>
+                    <Dialog.Title style={styles.dialogTitle}>Beri Sanksi / Poin</Dialog.Title>
+                    <Dialog.Content>
+                        <Text style={{ marginBottom: 15, color: colors.textSecondary }}>Berikan sanksi poin kepada {userName} (ID: {userId})</Text>
+                        <TextInput
+                            label="Jumlah Poin (Negatif)"
+                            placeholder="Contoh: -10"
+                            value={punishmentModal.points}
+                            onChangeText={(t) => setPunishmentModal({ ...punishmentModal, points: t })}
+                            keyboardType="numeric"
+                            mode="outlined"
+                            style={styles.dialogInput}
+                        />
+                        <TextInput
+                            label="Alasan Sanksi"
+                            placeholder="Contoh: Foto tidak sesuai / Titip absen"
+                            value={punishmentModal.reason}
+                            onChangeText={(t) => setPunishmentModal({ ...punishmentModal, reason: t })}
+                            mode="outlined"
+                            multiline
+                            numberOfLines={3}
+                            style={styles.dialogInput}
+                        />
+                    </Dialog.Content>
+                    <Dialog.Actions style={styles.dialogActions}>
+                        <Button onPress={() => setPunishmentModal({ ...punishmentModal, visible: false })} textColor={colors.textMuted}>Batal</Button>
+                        <Button
+                            mode="contained"
+                            disabled={punishmentLoading}
+                            loading={punishmentLoading}
+                            onPress={async () => {
+                                if (!punishmentModal.points || !punishmentModal.reason) return;
+                                setPunishmentLoading(true);
+                                try {
+                                    const token = await SecureStore.getItemAsync('authToken');
+                                    await axios.post(`${API_CONFIG.BASE_URL}/admin/punishment`, {
+                                        userId: userId,
+                                        points: parseInt(punishmentModal.points),
+                                        reason: punishmentModal.reason
+                                    }, { headers: { Authorization: `Bearer ${token}` } });
+                                    setPunishmentModal({ visible: false, points: '', reason: '' });
+                                    alert('Sanksi berhasil diberikan');
+                                } catch (e) {
+                                    console.error(e);
+                                    alert('Gagal memberikan sanksi');
+                                } finally {
+                                    setPunishmentLoading(false);
+                                }
+                            }}
+                            buttonColor={colors.error}
+                            style={styles.applyBtn}
+                        >
+                            Kirim Sanksi
+                        </Button>
+                    </Dialog.Actions>
+                </Dialog>
             </Portal>
         </View>
     );
@@ -636,6 +780,82 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         fontSize: 20,
         fontWeight: 'bold',
+    },
+    dialogInput: {
+        backgroundColor: 'white',
+        marginBottom: 12,
+    },
+    profileHeaderCard: {
+        backgroundColor: 'white',
+        margin: 16,
+        marginBottom: 8,
+        padding: 16,
+        borderRadius: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        ...shadows.sm,
+    },
+    profileHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    profileAvatar: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    profileAvatarText: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: colors.primary,
+    },
+    profileInfo: {
+        gap: 2,
+    },
+    profileName: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: colors.textPrimary,
+    },
+    profileBadgeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    roleBadgeText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: colors.textSecondary,
+    },
+    roleBadge: {
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    pointsBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    pointsBadgeText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    positionBadge: {
+        backgroundColor: `${colors.primary}10`,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    positionText: {
+        fontSize: 10,
+        color: colors.primary,
+        fontWeight: '700',
     },
     dialogLabel: {
         fontSize: 12,
@@ -810,20 +1030,25 @@ const styles = StyleSheet.create({
     // Photo Modal Styles
     photoModalContainer: {
         backgroundColor: 'white',
-        marginHorizontal: 20,
-        borderRadius: 20,
-        maxHeight: '90%',
+        margin: 20,
+        borderRadius: 24,
+        padding: 0,
+        overflow: 'hidden',
     },
     photoModalContent: {
-        padding: 0,
+        padding: 20,
     },
     photoModalHeader: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.divider,
+        justifyContent: 'center',
+        marginBottom: 20,
+        gap: 10,
+    },
+    photoModalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: colors.textPrimary,
     },
     photoTypeBadge: {
         flexDirection: 'row',
@@ -832,49 +1057,70 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         borderRadius: 20,
         gap: 6,
+        marginBottom: 12,
+        alignSelf: 'center',
     },
     photoTypeText: {
         fontSize: 13,
         fontWeight: 'bold',
     },
-    photoImage: {
-        width: '100%',
-        height: 350,
+    auditContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 20,
+    },
+    auditItem: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    auditLabel: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: colors.textSecondary,
+        marginBottom: 8,
+    },
+    auditImage: {
+        width: 120,
+        height: 150,
+        borderRadius: 12,
         backgroundColor: '#F3F4F6',
     },
-    noPhotoView: {
-        height: 350,
+    noProfile: {
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#F9FAFB',
-    },
-    noPhotoViewText: {
-        marginTop: 12,
-        fontSize: 14,
-        color: colors.textMuted,
+        borderWidth: 1,
+        borderColor: colors.divider,
+        borderStyle: 'dashed',
     },
     photoDetails: {
-        padding: 16,
-        gap: 12,
+        backgroundColor: '#F9FAFB',
+        padding: 15,
+        borderRadius: 16,
+        marginBottom: 20,
     },
     photoDetailRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        marginBottom: 8,
     },
     photoDetailLabel: {
         fontSize: 13,
         fontWeight: '600',
         color: colors.textSecondary,
-        width: 60,
+        marginLeft: 8,
+        width: 80,
     },
     photoDetailValue: {
         fontSize: 13,
         color: colors.textPrimary,
+        fontWeight: '500',
     },
     photoCloseButton: {
-        margin: 16,
         borderRadius: 12,
+        backgroundColor: colors.primary,
+        height: 48,
+        justifyContent: 'center',
     },
     // Monthly Summary Chart Styles
     summaryChartCard: {
@@ -918,5 +1164,24 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: colors.textSecondary,
         fontWeight: '500',
+    },
+    loadMoreBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+        backgroundColor: colors.surface,
+        borderRadius: 12,
+        marginTop: 8,
+        marginBottom: 24,
+        borderWidth: 1,
+        borderColor: colors.primary,
+        borderStyle: 'dashed',
+    },
+    loadMoreText: {
+        marginLeft: 8,
+        color: colors.primary,
+        fontWeight: 'bold',
+        fontSize: 14,
     },
 });

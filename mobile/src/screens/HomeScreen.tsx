@@ -10,6 +10,8 @@ import {
     RefreshControl,
     Platform,
     Image,
+    Animated,
+    ViewStyle,
 } from 'react-native';
 import { Text, Avatar, Surface, useTheme } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
@@ -32,6 +34,15 @@ export default function HomeScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date());
     const [stats, setStats] = useState({ hadir: 0, telat: 0, lembur: 0, izin: 0, alpha: 0 });
+    const [fadeAnim] = useState(new Animated.Value(0));
+
+    useEffect(() => {
+        Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+        }).start();
+    }, []);
 
     const fetchStats = async () => {
         try {
@@ -103,26 +114,40 @@ export default function HomeScreen() {
         });
     };
 
-    const QuickAction = ({ icon, title, subtitle, color, onPress, isLarge = false }: any) => (
-        <TouchableOpacity
-            style={[styles.actionCard, isLarge && styles.actionCardLarge]}
-            onPress={onPress}
-            activeOpacity={0.7}
-        >
-            <View style={[styles.actionIcon, { backgroundColor: `${color}10` }]}>
-                <MaterialCommunityIcons name={icon} size={28} color={color} />
-            </View>
-            <View style={styles.actionText}>
-                <Text style={styles.actionTitle}>{title}</Text>
-                <Text style={styles.actionSubtitle} numberOfLines={2}>{subtitle}</Text>
-            </View>
-        </TouchableOpacity>
+    const QuickAction = ({ icon, title, subtitle, color, onPress, isFullWidth = false }: any) => (
+        <Animated.View style={[{ flex: isFullWidth ? 0 : 1, width: isFullWidth ? '100%' : 'auto', opacity: fadeAnim }]}>
+            <TouchableOpacity
+                style={[styles.actionCard, isFullWidth && styles.actionCardFull]}
+                onPress={onPress}
+                activeOpacity={0.7}
+            >
+                <View style={[isFullWidth ? styles.actionCardLeftFull : styles.actionCardTop]}>
+                    <View style={[styles.actionIconContainer, { backgroundColor: `${color}12` }]}>
+                        <MaterialCommunityIcons name={icon} size={isFullWidth ? 26 : 22} color={color} />
+                    </View>
+                </View>
+                <View style={[isFullWidth ? styles.actionTextContainerFull : styles.actionTextContainer]}>
+                    <Text style={styles.actionTitle} numberOfLines={1}>{title}</Text>
+                    <Text style={styles.actionSubtitle} numberOfLines={1}>{subtitle}</Text>
+                </View>
+                {isFullWidth && (
+                    <View style={styles.fullWidthArrow}>
+                        <MaterialCommunityIcons name="chevron-right" size={20} color="#CBD5E1" />
+                    </View>
+                )}
+            </TouchableOpacity>
+        </Animated.View>
     );
 
-    const StatItem = ({ label, value, color }: any) => (
-        <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color }]}>{value}</Text>
-            <Text style={styles.statLabel}>{label}</Text>
+    const StatItem = ({ label, value, color, icon }: any) => (
+        <View style={styles.statBox}>
+            <View style={[styles.statIconCircle, { backgroundColor: `${color}08` }]}>
+                <MaterialCommunityIcons name={icon} size={18} color={color} />
+            </View>
+            <View style={styles.statTextGroup}>
+                <Text style={styles.statLabel}>{label}</Text>
+                <Text style={[styles.statValue, { color }]}>{value}</Text>
+            </View>
         </View>
     );
 
@@ -194,29 +219,33 @@ export default function HomeScreen() {
                 showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
             >
-                {/* Spacer khusus Owner agar tidak tertutup Header */}
-                {user?.role === 'OWNER' && <View style={{ height: spacing.lg }} />}
-                {/* Status Summary (Clean Minimalist) - Hidden for Owner */}
-                {user?.role !== 'OWNER' && (
-                    <View style={styles.statsContainer}>
-                        <StatItem label="Hadir" value={stats.hadir.toString()} color={colors.success} />
-                        <View style={styles.statDivider} />
-                        <StatItem label="Telat" value={stats.telat.toString()} color={colors.warning} />
-                        <View style={stats.lembur > 0 ? {} : { display: 'none' }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <View style={styles.statDivider} />
-                                <StatItem label="Lembur" value={stats.lembur.toString()} color="#9333EA" />
-                            </View>
+                {/* Status Summary */}
+                {user?.role !== 'OWNER' ? (
+                    <Animated.View style={[styles.statsSection, { opacity: fadeAnim }]}>
+                        <View style={styles.statsGrid}>
+                            <StatItem label="Hadir" value={stats.hadir} color={colors.success} icon="check-all" />
+                            <StatItem label="Telat" value={stats.telat} color={colors.warning} icon="clock-alert" />
+                            <StatItem label="Izin" value={stats.izin} color={colors.info} icon="calendar-text" />
+                            <StatItem label="Alpha" value={stats.alpha} color={colors.error} icon="close-circle" />
                         </View>
-                        <View style={styles.statDivider} />
-                        <StatItem label="Izin" value={stats.izin.toString()} color={colors.info} />
-                        <View style={styles.statDivider} />
-                        <StatItem label="Alpha" value={stats.alpha.toString()} color={colors.error} />
-                    </View>
+                    </Animated.View>
+                ) : (
+                    <Animated.View style={[styles.ownerSummaryBox, { opacity: fadeAnim }]}>
+                        <Surface style={styles.ownerSummarySurface} elevation={2}>
+                            <View style={styles.ownerSummaryContent}>
+                                <View>
+                                    <Text style={styles.ownerSummaryLabel}>Karyawan Hadir Hari Ini</Text>
+                                    <Text style={styles.ownerSummaryValue}>{stats.hadir}</Text>
+                                </View>
+                                <View style={styles.ownerSummaryBadge}>
+                                    <MaterialCommunityIcons name="account-group" size={24} color={colors.primary} />
+                                </View>
+                            </View>
+                        </Surface>
+                    </Animated.View>
                 )}
 
-                <Text style={styles.sectionTitle}>Akses Cepat</Text>
-
+                <Text style={styles.sectionTitle}>Menu Utama</Text>
                 {/* Menu Grid */}
                 <View style={styles.gridContainer}>
                     {/* Primary Action: Absensi (Full Width) */}
@@ -246,107 +275,141 @@ export default function HomeScreen() {
                         </TouchableOpacity>
                     )}
 
-                    <View style={styles.row}>
-                        <QuickAction
-                            icon={['OWNER', 'HEAD'].includes(user?.role || '') ? "clipboard-list" : "calendar-check"}
-                            title={['OWNER', 'HEAD'].includes(user?.role || '') ? "Monitoring Absensi" : "Kalender"}
-                            subtitle={['OWNER', 'HEAD'].includes(user?.role || '') ? "Status Kehadiran" : "Riwayat Absen"}
-                            color={colors.primary}
-                            onPress={() => {
-                                if (['OWNER', 'HEAD'].includes(user?.role || '')) {
-                                    navigation.navigate('EmployeeList');
-                                } else {
-                                    navigation.navigate('AttendanceCalendar');
-                                }
-                            }}
-                        />
-                        <QuickAction
-                            icon="file-document-outline"
-                            title="Rekap"
-                            subtitle="Laporan Bulanan"
-                            color="#8B5CF6"
-                            onPress={() => {
-                                if (user?.role === 'OWNER') {
-                                    navigation.navigate('OwnerRecapBranch');
-                                } else {
-                                    navigation.navigate('MainTabs', { screen: 'HistoryTab' });
-                                }
-                            }}
-                        />
-                    </View>
+                    {/* Dynamic Menu Generation */}
+                    {(() => {
+                        const menus = [];
 
-                    <View style={styles.row}>
-                        <QuickAction
-                            icon={user?.role === 'OWNER' ? "trophy-award" : "star-face"}
-                            title={user?.role === 'OWNER' ? "Leaderboard" : "Poin Saya"}
-                            subtitle={user?.role === 'OWNER' ? "Top Karyawan" : "Prestasi & Sanksi"}
-                            color={user?.role === 'OWNER' ? "#EAB308" : colors.warning}
-                            onPress={() => {
-                                if (user?.role === 'OWNER') {
-                                    navigation.navigate('Leaderboard');
-                                } else {
-                                    navigation.navigate('Points');
-                                }
-                            }}
-                        />
-                        <QuickAction
-                            icon="account-cog"
-                            title="Profil"
-                            subtitle="Pengaturan Akun"
-                            color="#EF4444"
-                            onPress={() => navigation.navigate('ProfileTab')}
-                        />
-                    </View>
+                        // 1. Monitoring / Calendar
+                        menus.push({
+                            icon: ['OWNER', 'HEAD'].includes(user?.role || '') ? "clipboard-list" : "calendar-check",
+                            title: ['OWNER', 'HEAD'].includes(user?.role || '') ? "Monitoring" : "Kalender",
+                            subtitle: ['OWNER', 'HEAD'].includes(user?.role || '') ? "Kehadiran Tim" : "Riwayat Absen",
+                            color: colors.primary,
+                            onPress: () => {
+                                if (['OWNER', 'HEAD'].includes(user?.role || '')) navigation.navigate('EmployeeList');
+                                else navigation.navigate('AttendanceCalendar');
+                            }
+                        });
 
-                    {/* Owner & Head Specific Menus */}
-                    {['OWNER', 'HEAD'].includes(user?.role || '') && (
-                        <View style={[styles.row, { marginTop: spacing.md }]}>
-                            {user?.role === 'OWNER' && (
-                                <QuickAction
-                                    icon="store-search"
-                                    title="Outlet"
-                                    subtitle="Kelola Cabang"
-                                    color={colors.info}
-                                    onPress={() => navigation.navigate('BranchList')}
-                                />
-                            )}
-                            <QuickAction
-                                icon="account-group"
-                                title="Karyawan"
-                                subtitle="Data Pegawai"
-                                color="#10B981"
-                                onPress={() => navigation.navigate('UserList')}
-                            />
-                        </View>
-                    )}
+                        // 2. Rekap
+                        menus.push({
+                            icon: "file-document-outline",
+                            title: "Rekap",
+                            subtitle: "Laporan Bulanan",
+                            color: "#8B5CF6",
+                            onPress: () => {
+                                if (user?.role === 'OWNER') navigation.navigate('OwnerRecapBranch');
+                                else navigation.navigate('MainTabs', { screen: 'HistoryTab' });
+                            }
+                        });
 
-                    {/* Leaderboard - Visible to Employee (Owner has it in top grid) */}
-                    {user?.role !== 'OWNER' && (
-                        <View style={styles.row}>
-                            <QuickAction
-                                icon="trophy-award"
-                                title="Leaderboard"
-                                subtitle="Top Karyawan"
-                                color="#EAB308"
-                                onPress={() => navigation.navigate('Leaderboard')}
-                            />
+                        // 3. Poin / Leaderboard
+                        if (user?.role === 'OWNER') {
+                            menus.push({
+                                icon: "trophy-award",
+                                title: "Leaderboard",
+                                subtitle: "Top Karyawan",
+                                color: "#EAB308",
+                                onPress: () => navigation.navigate('Leaderboard')
+                            });
+                        } else {
+                            menus.push({
+                                icon: "star-face",
+                                title: "Poin Saya",
+                                subtitle: "Prestasi & Sanksi",
+                                color: colors.warning,
+                                onPress: () => navigation.navigate('Points')
+                            });
+                        }
 
-                            {/* Check for Head of Store/Manager for Event Management */}
-                            {(user?.role === 'HEAD' || user?.role === 'OWNER') ? (
-                                <QuickAction
-                                    icon="calendar-star"
-                                    title="Kelola Event"
-                                    subtitle="Jadwal Khusus"
-                                    color="#EC4899"
-                                    onPress={() => navigation.navigate('EventManagement')}
-                                />
-                            ) : (
-                                <View style={{ flex: 1 }} />
-                            )}
-                        </View>
-                    )}
+                        // 4. Profil
+                        menus.push({
+                            icon: "account-cog",
+                            title: "Profil",
+                            subtitle: "Pengaturan Akun",
+                            color: "#EF4444",
+                            onPress: () => navigation.navigate('ProfileTab')
+                        });
+
+                        // 5. Cuti
+                        menus.push({
+                            icon: user?.role === 'OWNER' ? "calendar-clock" : "calendar-edit",
+                            title: user?.role === 'OWNER' ? "Manajemen Cuti" : "Ajukan Cuti",
+                            subtitle: user?.role === 'OWNER' ? "Persetujuan Izin" : "Izin/Sakit/Cuti",
+                            color: "#06B6D4",
+                            onPress: () => {
+                                if (user?.role === 'OWNER') navigation.navigate('LeaveManagement');
+                                else navigation.navigate('LeaveRequest');
+                            }
+                        });
+
+                        // 6. Leaderboard (for non-owner)
+                        if (user?.role !== 'OWNER') {
+                            menus.push({
+                                icon: "trophy-award",
+                                title: "Leaderboard",
+                                subtitle: "Peringkat",
+                                color: "#EAB308",
+                                onPress: () => navigation.navigate('Leaderboard')
+                            });
+                        }
+
+                        // 7. Owner/Head Specifics
+                        if (user?.role === 'OWNER') {
+                            menus.push({
+                                icon: "store-search", title: "Outlet", subtitle: "Kelola Cabang", color: colors.info,
+                                onPress: () => navigation.navigate('BranchList')
+                            });
+                            menus.push({
+                                icon: "account-group", title: "Karyawan", subtitle: "Data Pegawai", color: "#10B981",
+                                onPress: () => navigation.navigate('UserList')
+                            });
+                            menus.push({
+                                icon: "clock-edit-outline", title: "Jam Shift", subtitle: "Atur Shift", color: "#F97316",
+                                onPress: () => navigation.navigate('ShiftList')
+                            });
+                            menus.push({
+                                icon: "briefcase-edit-outline", title: "Posisi", subtitle: "Jabatan", color: "#6366F1",
+                                onPress: () => navigation.navigate('PositionList')
+                            });
+                        } else if (user?.role === 'HEAD') {
+                            menus.push({
+                                icon: "account-group", title: "Karyawan", subtitle: "Data Pegawai", color: "#10B981",
+                                onPress: () => navigation.navigate('UserList')
+                            });
+                        }
+
+                        // 8. Event
+                        if (['OWNER', 'HEAD'].includes(user?.role || '')) {
+                            menus.push({
+                                icon: "calendar-star", title: "Event", subtitle: "Jadwal Khusus", color: "#EC4899",
+                                onPress: () => navigation.navigate('EventManagement')
+                            });
+                        }
+
+                        // Render in rows of 2
+                        const rows = [];
+                        for (let i = 0; i < menus.length; i += 2) {
+                            if (i + 1 < menus.length) {
+                                rows.push(
+                                    <View key={`row-${i}`} style={styles.row}>
+                                        <QuickAction {...menus[i]} />
+                                        <QuickAction {...menus[i + 1]} />
+                                    </View>
+                                );
+                            } else {
+                                // Odd item - Full Width
+                                rows.push(
+                                    <View key={`row-${i}`} style={styles.row}>
+                                        <QuickAction {...menus[i]} isFullWidth />
+                                    </View>
+                                );
+                            }
+                        }
+                        return rows;
+                    })()}
+
                 </View>
-
 
                 {/* Quote / Info Card */}
                 <Surface style={styles.infoCard} elevation={1}>
@@ -355,7 +418,6 @@ export default function HomeScreen() {
                         "Disiplin adalah jembatan antara tujuan dan pencapaian."
                     </Text>
                 </Surface>
-
             </ScrollView >
         </View >
     );
@@ -364,310 +426,310 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background,
+        backgroundColor: '#F8FAFC',
     },
     header: {
-        padding: spacing.lg,
-        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 10 : 40, // Reduced from 20/60
+        paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 20 : 60,
+        paddingHorizontal: spacing.lg,
         backgroundColor: colors.primary,
-        borderBottomLeftRadius: 24, // Reduced from 36
-        borderBottomRightRadius: 24, // Reduced from 36
-        overflow: 'hidden',
+        borderBottomLeftRadius: 30,
+        borderBottomRightRadius: 30,
+        paddingBottom: 60,
         position: 'relative',
-        paddingBottom: 25, // Reduced from 40
     },
     watermarkContainer: {
         position: 'absolute',
-        right: -40,
-        top: -40,
-        opacity: 0.2,
-        zIndex: 0,
+        right: -30,
+        top: -30,
+        opacity: 0.1,
     },
     watermarkLogo: {
-        width: 300,
-        height: 300,
-        transform: [{ rotate: '-15deg' }],
+        width: 250,
+        height: 250,
+        transform: [{ rotate: '-10deg' }],
     },
     headerTop: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: spacing.lg,
-        zIndex: 2,
+        alignItems: 'center',
+    },
+    headerLeft: {
+        flex: 1,
     },
     greeting: {
-        fontSize: 14,
-        color: 'rgba(255,255,255,0.9)',
-        marginBottom: 4,
+        fontSize: 13,
+        color: 'rgba(255,255,255,0.8)',
+        fontWeight: '500',
     },
     userName: {
-        fontSize: 22,
-        fontWeight: 'bold',
+        fontSize: 20,
         color: '#FFF',
-        marginBottom: 4,
-    },
-    avatar: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        backgroundColor: 'transparent', // Avoid white box behind image
-        borderWidth: 2,
-        borderColor: '#FFFFFF', // Solid white border for premium look
-        overflow: 'hidden',
-    },
-    avatarPlaceholder: {
-        backgroundColor: '#FFFFFF', // Only for text/placeholder
+        fontWeight: 'bold',
+        marginTop: 2,
     },
     roleBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.2)',
+        backgroundColor: 'rgba(255,255,255,0.15)',
         paddingHorizontal: 8,
         paddingVertical: 2,
-        borderRadius: 12,
+        borderRadius: 8,
+        marginTop: 6,
         alignSelf: 'flex-start',
     },
     roleText: {
         color: '#FFF',
         fontSize: 10,
-        fontWeight: 'bold',
-        marginLeft: 4,
+        fontWeight: '600',
         textTransform: 'uppercase',
     },
+    headerRight: {
+        marginLeft: 15,
+    },
+    avatar: {
+        borderWidth: 1.5,
+        borderColor: '#FFF',
+    },
+    avatarPlaceholder: {
+        backgroundColor: '#FFF',
+    },
     clockCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#FFFFFF',
+        position: 'absolute',
+        bottom: -30,
+        left: spacing.lg,
+        right: spacing.lg,
+        backgroundColor: '#FFF',
         borderRadius: 20,
         padding: 16,
-        marginHorizontal: 8,
-        // Elevation/Shadow
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 6,
+        paddingHorizontal: 20,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        ...shadows.md,
     },
     clockTime: {
         fontSize: 22,
-        fontWeight: '700',
-        color: colors.primary,
-        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+        fontWeight: 'bold',
+        color: colors.textPrimary,
+        letterSpacing: 0.5,
     },
     clockDate: {
-        fontSize: 12,
+        fontSize: 11,
         color: colors.textSecondary,
         fontWeight: '500',
-        marginTop: 2,
+        marginTop: 1,
     },
     clockIconBadge: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#FEE2E2',
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: '#F1F5F9',
         alignItems: 'center',
         justifyContent: 'center',
     },
     content: {
         flex: 1,
-        marginTop: -20,
     },
     scrollContent: {
+        paddingTop: 50,
         paddingHorizontal: spacing.lg,
         paddingBottom: 40,
-        paddingTop: 10,
     },
-    statsContainer: {
+    statsSection: {
+        marginBottom: 25,
+    },
+    statsGrid: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+    },
+    statBox: {
+        flex: 1,
+        minWidth: '46%',
         backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: spacing.md,
-        justifyContent: 'space-between',
+        borderRadius: 20,
+        padding: 14,
+        flexDirection: 'row',
         alignItems: 'center',
         ...shadows.sm,
-        marginBottom: spacing.sm,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+        gap: 12,
     },
-    statItem: {
+    statIconCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         alignItems: 'center',
+        justifyContent: 'center',
+    },
+    statTextGroup: {
         flex: 1,
     },
     statValue: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        marginBottom: 4,
+        fontSize: 18,
+        fontWeight: '800',
     },
     statLabel: {
         fontSize: 10,
         color: colors.textSecondary,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
-    statDivider: {
-        width: 1,
-        height: 30,
-        backgroundColor: colors.divider,
+    ownerSummaryBox: {
+        marginBottom: 25,
+    },
+    ownerSummarySurface: {
+        backgroundColor: '#FFF',
+        borderRadius: 20,
+        padding: 20,
+        ...shadows.md,
+    },
+    ownerSummaryContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    ownerSummaryLabel: {
+        fontSize: 12,
+        color: colors.textSecondary,
+        fontWeight: '600',
+        marginBottom: 4,
+    },
+    ownerSummaryValue: {
+        fontSize: 26,
+        fontWeight: 'bold',
+        color: colors.textPrimary,
+    },
+    ownerSummaryBadge: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: `${colors.primary}08`,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     sectionTitle: {
         fontSize: 15,
-        fontWeight: '700',
-        color: colors.textPrimary,
-        marginBottom: 10,
-        marginLeft: 4,
-        marginTop: 4,
+        fontWeight: '800',
+        color: colors.primary, // Red accent for section titles
+        marginBottom: 15,
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
     },
     gridContainer: {
         gap: 12,
-        paddingBottom: 20,
     },
     row: {
         flexDirection: 'row',
         gap: 12,
-        marginBottom: 0,
     },
     mainAction: {
-        marginBottom: 4,
-        borderRadius: 20,
+        backgroundColor: colors.primary,
+        borderRadius: 22,
         overflow: 'hidden',
-        elevation: 3,
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.15,
-        shadowRadius: 6,
+        marginBottom: 6,
+        ...shadows.md,
     },
     mainActionGradient: {
-        padding: 16,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        padding: 20,
     },
     mainActionContent: {
         flexDirection: 'row',
         alignItems: 'center',
     },
     mainActionIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 12,
-    },
-    mainActionTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#FFF',
-    },
-    mainActionSubtitle: {
-        fontSize: 12,
-        color: 'rgba(255,255,255,0.9)',
-    },
-    actionCard: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        paddingVertical: 20,
-        paddingHorizontal: 8,
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
-        minHeight: 120, // Taller for vertical stack
-        shadowColor: "#64748B",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 6,
-        elevation: 2,
-    },
-    actionCardLarge: {
-        width: '100%',
-        flexDirection: 'row',
-        justifyContent: 'flex-start',
-        paddingHorizontal: 16,
-        minHeight: 80,
-    },
-    actionIcon: {
         width: 48,
         height: 48,
         borderRadius: 16,
+        backgroundColor: 'rgba(255,255,255,0.2)',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 10,
+        marginRight: 15,
     },
-    actionText: {
+    mainActionTitle: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: '#FFF',
+    },
+    mainActionSubtitle: {
+        fontSize: 11,
+        color: 'rgba(255,255,255,0.85)',
+        marginTop: 2,
+    },
+    actionCard: {
+        flex: 1,
+        backgroundColor: '#FFF',
+        borderRadius: 24,
+        padding: 18,
+        minHeight: 125,
+        justifyContent: 'space-between',
+        ...shadows.sm,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+    },
+    actionCardFull: {
+        minHeight: 80,
+        flexDirection: 'row',
         alignItems: 'center',
+        paddingHorizontal: 20,
+    },
+    actionCardTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+    },
+    actionCardLeftFull: {
+        marginRight: 15,
+    },
+    actionIconContainer: {
+        width: 38,
+        height: 38,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    actionTextContainer: {
         width: '100%',
     },
+    actionTextContainerFull: {
+        flex: 1,
+    },
     actionTitle: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#1E293B',
-        marginBottom: 2,
-        textAlign: 'center',
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: colors.textPrimary,
+        letterSpacing: -0.3,
     },
     actionSubtitle: {
         fontSize: 10,
-        color: '#64748B',
+        color: colors.textSecondary,
+        marginTop: 4,
         fontWeight: '500',
-        textAlign: 'center',
-        lineHeight: 12,
     },
-    actionArrow: {
-        display: 'none',
+    fullWidthArrow: {
+        backgroundColor: '#F8FAFC',
+        padding: 4,
+        borderRadius: 8,
     },
     infoCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#E0F2FE', // Light blue bg
-        padding: spacing.sm, // Reduced from md
-        borderRadius: 10, // Reduced from 12
-        marginTop: spacing.sm, // Reduced from lg
+        backgroundColor: '#F8FAFC',
+        padding: 16,
+        borderRadius: 20,
+        marginTop: 15,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
     },
     infoText: {
         flex: 1,
-        marginLeft: spacing.sm,
-        fontSize: 12,
-        color: '#0369A1', // Darker blue text
-        fontStyle: 'italic',
-    },
-    // New header layout styles
-    headerLeft: {
-        flex: 1,
-    },
-    headerCenter: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 8,
-    },
-    headerRight: {
-        alignItems: 'flex-end',
-    },
-    logoContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    logoBackground: {
-        width: 56,
-        height: 56,
-        borderRadius: 0,
-        backgroundColor: '#FFFFFF',
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-        elevation: 4,
-    },
-    logoImage: {
-        width: 48,
-        height: 48,
-    },
-    logoText: {
-        color: '#FFFFFF',
-        fontSize: 10,
-        fontWeight: '700',
-        marginTop: 2,
-        letterSpacing: 1,
-        textTransform: 'uppercase',
+        marginLeft: 12,
+        fontSize: 11,
+        color: colors.textSecondary,
+        fontWeight: '500',
+        lineHeight: 16,
     },
 });

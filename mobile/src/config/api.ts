@@ -7,7 +7,7 @@ export const API_CONFIG = {
 
     // 2. PRODUCTION (VPS / Hosting)
     // Ganti dengan IP VPS atau Domain Anda saat build APK
-    BASE_URL: 'http://157.15.40.27:3176/api',
+    BASE_URL: 'http://157.15.40.27:3000/api',
 
     TIMEOUT: 15000,
     GOOGLE_CLIENT_IDS: {
@@ -28,6 +28,8 @@ export const ENDPOINTS = {
     HISTORY: '/attendance/history',
     POINTS: '/attendance/points',
     SETTINGS: '/admin/settings',
+    SHIFTS: '/shifts',
+    LEAVES: '/leaves',
 };
 
 export const apiClient = axios.create({
