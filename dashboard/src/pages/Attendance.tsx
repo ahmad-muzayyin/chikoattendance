@@ -16,6 +16,7 @@ interface AttendanceRecord {
   isLate: boolean;
   notes?: string;
   User?: {
+    id: string;
     name: string;
     role: string;
   };
@@ -40,7 +41,6 @@ const Attendance = () => {
   });
 
   useEffect(() => {
-    // Fetch employees for dropdown (for manual add)
     const fetchEmps = async () => {
       try {
         const res = await apiClient.get('/admin/employees');
@@ -74,15 +74,18 @@ const Attendance = () => {
     setSelectedDate(e.target.value);
   };
 
-  const openAddModal = () => {
+  const openAddModal = (userId = '', type = 'CHECK_IN') => {
     setModalMode('add');
+    const targetDate = new Date(selectedDate);
     const now = new Date();
-    // format to datetime-local string (YYYY-MM-DDThh:mm)
-    const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    
+    targetDate.setHours(now.getHours(), now.getMinutes());
+
+    const localDateTime = new Date(targetDate.getTime() - targetDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     
     setFormData({
-      userId: employees.length > 0 ? employees[0].id : '',
-      type: 'CHECK_IN',
+      userId: userId || (employees.length > 0 ? employees[0].id : ''),
+      type,
       timestamp: localDateTime,
       notes: 'Ditambahkan manual dari dashboard'
     });
@@ -96,7 +99,7 @@ const Attendance = () => {
     const localDateTime = new Date(dateObj.getTime() - dateObj.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     
     setFormData({
-      userId: '', // not needed for edit, but keep structure
+      userId: '',
       type: record.type,
       timestamp: localDateTime,
       notes: record.notes || ''
@@ -108,7 +111,6 @@ const Attendance = () => {
     if (window.confirm('Yakin ingin menghapus data absen ini?')) {
       try {
         await apiClient.delete(`/admin/attendance/${id}`);
-        alert('Absensi dihapus');
         fetchDailyAttendance();
       } catch (e) {
         alert('Gagal menghapus');
@@ -125,10 +127,8 @@ const Attendance = () => {
           return;
         }
         await apiClient.post('/admin/attendance/manual', formData);
-        alert('Absensi manual berhasil ditambahkan');
       } else {
         await apiClient.put(`/admin/attendance/${selectedRecordId}`, formData);
-        alert('Absensi berhasil diperbarui');
       }
       setShowModal(false);
       fetchDailyAttendance();
@@ -137,11 +137,38 @@ const Attendance = () => {
     }
   };
 
+  // Group records by User
+  const groupedData = React.useMemo(() => {
+    const map = new Map<string, {
+      user: { id: string; name: string; role: string },
+      checkIn?: AttendanceRecord,
+      checkOut?: AttendanceRecord,
+      other: AttendanceRecord[]
+    }>();
+
+    records.forEach(rec => {
+      if (!rec.User) return;
+      if (!map.has(rec.User.id)) {
+        map.set(rec.User.id, { user: rec.User, other: [] });
+      }
+      const u = map.get(rec.User.id)!;
+      if (rec.type === 'CHECK_IN' && !u.checkIn) {
+        u.checkIn = rec;
+      } else if (rec.type === 'CHECK_OUT' && !u.checkOut) {
+        u.checkOut = rec;
+      } else {
+        u.other.push(rec);
+      }
+    });
+
+    return Array.from(map.values());
+  }, [records]);
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Pemantauan Absensi Harian</h1>
-        <button className="btn btn-primary" onClick={openAddModal}>
+        <button className="btn btn-primary" onClick={() => openAddModal()}>
           <Plus size={18} /> Tambah Manual
         </button>
       </div>
@@ -163,54 +190,76 @@ const Attendance = () => {
       <div className="card table-container">
         {loading ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>Memuat data...</div>
-        ) : !Array.isArray(records) || records.length === 0 ? (
+        ) : groupedData.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
             <Search size={48} style={{ opacity: 0.2, margin: '0 auto 1rem' }} />
-            Belum ada riwayat absensi pada tanggal ini.
+            Belum ada karyawan yang absen pada tanggal ini.
           </div>
         ) : (
           <table>
             <thead>
               <tr>
                 <th>Nama Karyawan</th>
-                <th>Waktu</th>
-                <th>Tipe</th>
-                <th>Status</th>
+                <th>Check In (Masuk)</th>
+                <th>Check Out (Pulang)</th>
                 <th>Catatan</th>
-                <th style={{ textAlign: 'right' }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
-              {records.map((rec) => (
-                <tr key={rec.id}>
+              {groupedData.map((row) => (
+                <tr key={row.user.id}>
                   <td>
-                    <div style={{ fontWeight: 500 }}>{rec.User?.name || 'Tidak diketahui'}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{rec.User?.role || ''}</div>
+                    <div style={{ fontWeight: 500 }}>{row.user.name}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{row.user.role}</div>
                   </td>
+                  
+                  {/* Check In Column */}
                   <td>
-                    <div style={{ fontWeight: 500 }}>
-                      {format(new Date(rec.timestamp), 'HH:mm')}
-                    </div>
-                  </td>
-                  <td>
-                    <span className={`badge ${rec.type === 'CHECK_IN' ? 'badge-primary' : rec.type === 'CHECK_OUT' ? 'badge-danger' : 'badge-success'}`}>
-                      {rec.type.replace('_', ' ')}
-                    </span>
-                  </td>
-                  <td>
-                    {rec.isLate && <span className="badge badge-danger">Terlambat</span>}
-                    {!rec.isLate && <span className="badge badge-success">Tepat Waktu</span>}
-                  </td>
-                  <td style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>{rec.notes || '-'}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: '0.5rem' }}>
-                      <button className="btn btn-outline" style={{ padding: '0.4rem' }} onClick={() => openEditModal(rec)}>
-                        <Edit size={16} />
+                    {row.checkIn ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{ fontWeight: 500 }}>{format(new Date(row.checkIn.timestamp), 'HH:mm')}</div>
+                        {row.checkIn.isLate && <span className="badge badge-danger" style={{ fontSize: '0.7rem' }}>Terlambat</span>}
+                        <div style={{ display: 'flex', gap: '0.25rem', marginLeft: 'auto' }}>
+                          <button className="btn btn-outline" style={{ padding: '0.25rem', border: 'none' }} onClick={() => openEditModal(row.checkIn!)} title="Edit Check In">
+                            <Edit size={14} />
+                          </button>
+                          <button className="btn btn-outline" style={{ padding: '0.25rem', border: 'none', color: 'var(--danger-color)' }} onClick={() => handleDelete(row.checkIn!.id)} title="Hapus">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }} onClick={() => openAddModal(row.user.id, 'CHECK_IN')}>
+                        + Isi Masuk
                       </button>
-                      <button className="btn btn-danger" style={{ padding: '0.4rem' }} onClick={() => handleDelete(rec.id)}>
-                        <Trash2 size={16} />
+                    )}
+                  </td>
+
+                  {/* Check Out Column */}
+                  <td>
+                    {row.checkOut ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{ fontWeight: 500 }}>{format(new Date(row.checkOut.timestamp), 'HH:mm')}</div>
+                        <div style={{ display: 'flex', gap: '0.25rem', marginLeft: 'auto' }}>
+                          <button className="btn btn-outline" style={{ padding: '0.25rem', border: 'none' }} onClick={() => openEditModal(row.checkOut!)} title="Edit Check Out">
+                            <Edit size={14} />
+                          </button>
+                          <button className="btn btn-outline" style={{ padding: '0.25rem', border: 'none', color: 'var(--danger-color)' }} onClick={() => handleDelete(row.checkOut!.id)} title="Hapus">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }} onClick={() => openAddModal(row.user.id, 'CHECK_OUT')}>
+                        + Isi Pulang
                       </button>
-                    </div>
+                    )}
+                  </td>
+
+                  <td style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                    {row.checkIn?.notes && <div>In: {row.checkIn.notes}</div>}
+                    {row.checkOut?.notes && <div>Out: {row.checkOut.notes}</div>}
+                    {!row.checkIn?.notes && !row.checkOut?.notes && '-'}
                   </td>
                 </tr>
               ))}
