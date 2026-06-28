@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import apiClient from '../api/client';
-import { Trash2, Edit, Plus, X } from 'lucide-react';
+import { Trash2, Edit, Plus, X, Search, CalendarDays } from 'lucide-react';
+import UserAttendanceModal from '../components/UserAttendanceModal';
 
 interface Employee {
   id: string;
@@ -30,6 +31,11 @@ const UserManagement = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [branches, setBranches] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Attendance Modal state
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<{id: string, name: string} | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -81,6 +87,11 @@ const UserManagement = () => {
     setShowModal(true);
   };
 
+  const openAttendanceModal = (emp: Employee) => {
+    setSelectedEmployee({ id: emp.id, name: emp.name });
+    setShowAttendanceModal(true);
+  };
+
   const handleDelete = async (id: string) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus user ini? Aksi ini tidak dapat dibatalkan.')) {
       try {
@@ -115,6 +126,10 @@ const UserManagement = () => {
     }
   };
 
+  const filteredEmployees = employees.filter(emp => 
+    emp.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
@@ -122,6 +137,23 @@ const UserManagement = () => {
         <button className="btn btn-primary" onClick={openAddModal}>
           <Plus size={18} /> Tambah User
         </button>
+      </div>
+
+      <div className="card" style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center' }}>
+        <div style={{ flex: 1, maxWidth: '400px' }}>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Cari Nama Karyawan:</label>
+          <div style={{ position: 'relative' }}>
+            <Search size={18} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+            <input 
+              type="text" 
+              className="input-field" 
+              placeholder="Ketik nama karyawan..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ width: '100%', paddingLeft: '2.5rem' }}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="card table-container">
@@ -140,14 +172,14 @@ const UserManagement = () => {
               </tr>
             </thead>
             <tbody>
-              {!Array.isArray(employees) || employees.length === 0 ? (
+              {!Array.isArray(filteredEmployees) || filteredEmployees.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
                     Tidak ada data karyawan
                   </td>
                 </tr>
               ) : (
-                employees.map((emp) => (
+                filteredEmployees.map((emp) => (
                   <tr key={emp.id}>
                     <td>
                       <div style={{ fontWeight: 500 }}>{emp.name}</div>
@@ -174,10 +206,13 @@ const UserManagement = () => {
                     <td>Rp {emp.baseSalary?.toLocaleString('id-ID')}</td>
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', gap: '0.5rem' }}>
-                        <button className="btn btn-outline" style={{ padding: '0.4rem' }} onClick={() => openEditModal(emp)}>
+                        <button className="btn btn-outline" style={{ padding: '0.4rem', color: 'var(--primary-color)' }} onClick={() => openAttendanceModal(emp)} title="Lihat Riwayat Absensi">
+                          <CalendarDays size={16} />
+                        </button>
+                        <button className="btn btn-outline" style={{ padding: '0.4rem' }} onClick={() => openEditModal(emp)} title="Edit Karyawan">
                           <Edit size={16} />
                         </button>
-                        <button className="btn btn-danger" style={{ padding: '0.4rem' }} onClick={() => handleDelete(emp.id)}>
+                        <button className="btn btn-danger" style={{ padding: '0.4rem' }} onClick={() => handleDelete(emp.id)} title="Hapus Karyawan">
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -251,6 +286,16 @@ const UserManagement = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* User Attendance History Modal */}
+      {selectedEmployee && (
+        <UserAttendanceModal 
+          isOpen={showAttendanceModal}
+          onClose={() => setShowAttendanceModal(false)}
+          userId={selectedEmployee.id}
+          userName={selectedEmployee.name}
+        />
       )}
     </div>
   );
