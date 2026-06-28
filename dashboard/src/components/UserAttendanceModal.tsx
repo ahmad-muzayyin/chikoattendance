@@ -45,7 +45,7 @@ const UserAttendanceModal: React.FC<UserAttendanceModalProps> = ({ userId, userN
     setLoading(true);
     try {
       const [year, month] = selectedMonth.split('-');
-      const res = await apiClient.get(`/admin/attendance/${userId}?year=${year}&month=${month}`);
+      const res = await apiClient.get(`/admin/attendance/raw/${userId}?year=${year}&month=${month}`);
       setRecords(Array.isArray(res.data) ? res.data : []);
     } catch (e) {
       console.error(e);

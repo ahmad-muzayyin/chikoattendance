@@ -501,10 +501,24 @@ export const getUserPoints = async (req: Request, res: Response) => {
 export const getRawAttendance = async (req: Request, res: Response) => {
     try {
         const { userId } = req.params;
+        const { month, year } = req.query; // optional, default current
+
+        const date = new Date();
+        const m = month ? parseInt(month as string) : date.getMonth() + 1;
+        const y = year ? parseInt(year as string) : date.getFullYear();
+
+        const startOfMonth = new Date(y, m - 1, 1);
+        const endOfMonth = new Date(y, m, 0, 23, 59, 59);
+
         const records = await Attendance.findAll({
-            where: { userId },
-            order: [['timestamp', 'DESC']],
-            limit: 100 // Get latest 100 records
+            where: { 
+                userId,
+                timestamp: {
+                    [Op.gte]: startOfMonth,
+                    [Op.lte]: endOfMonth
+                }
+            },
+            order: [['timestamp', 'DESC']]
         });
         res.json(records);
     } catch (error) {
