@@ -12,6 +12,12 @@ interface Employee {
   Branch?: {
     name: string;
   };
+  stats?: {
+    hadir: number;
+    telat: number;
+    izin: number;
+    alpha: number;
+  };
 }
 
 const UserManagement = () => {
@@ -125,10 +131,10 @@ const UserManagement = () => {
           <table>
             <thead>
               <tr>
-                <th>Nama</th>
-                <th>Email</th>
+                <th>Nama & Email</th>
                 <th>Role</th>
                 <th>Outlet</th>
+                <th>Statistik Bulan Ini</th>
                 <th>Gaji Pokok</th>
                 <th style={{ textAlign: 'right' }}>Aksi</th>
               </tr>
@@ -143,14 +149,28 @@ const UserManagement = () => {
               ) : (
                 employees.map((emp) => (
                   <tr key={emp.id}>
-                    <td style={{ fontWeight: 500 }}>{emp.name}</td>
-                    <td style={{ color: 'var(--text-secondary)' }}>{emp.email}</td>
+                    <td>
+                      <div style={{ fontWeight: 500 }}>{emp.name}</div>
+                      <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{emp.email}</div>
+                    </td>
                     <td>
                       <span className={`badge ${emp.role === 'OWNER' ? 'badge-danger' : emp.role === 'HEAD' ? 'badge-primary' : 'badge-success'}`}>
                         {emp.role}
                       </span>
                     </td>
                     <td>{emp.Branch?.name || '-'}</td>
+                    <td>
+                      {emp.stats ? (
+                        <div style={{ fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <span style={{ color: 'var(--success-color)' }}>Hadir: {emp.stats.hadir}x {emp.stats.telat > 0 ? `(Telat ${emp.stats.telat}x)` : ''}</span>
+                          {(emp.stats.izin > 0 || emp.stats.alpha > 0) && (
+                            <span style={{ color: 'var(--danger-color)' }}>Izin/Sakit: {emp.stats.izin}x | Alpha: {emp.stats.alpha}x</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Belum ada data</span>
+                      )}
+                    </td>
                     <td>Rp {emp.baseSalary?.toLocaleString('id-ID')}</td>
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', gap: '0.5rem' }}>

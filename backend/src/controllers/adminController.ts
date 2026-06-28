@@ -66,8 +66,7 @@ export const getEmployees = async (req: Request, res: Response) => {
             where: {
                 timestamp: {
                     [Op.between]: [startOfMonth, endOfMonth]
-                },
-                type: 'CHECK_IN'
+                }
             },
             attributes: ['userId', 'type', 'isLate']
         });
@@ -76,10 +75,10 @@ export const getEmployees = async (req: Request, res: Response) => {
         const usersWithStats = users.map((user: any) => {
             const userAttendances = attendances.filter((a: any) => a.userId === user.id);
             const stats = {
-                hadir: userAttendances.length,
-                telat: userAttendances.filter((a: any) => a.isLate).length,
-                izin: 0,
-                alpha: 0
+                hadir: userAttendances.filter((a: any) => a.type === 'CHECK_IN').length,
+                telat: userAttendances.filter((a: any) => a.type === 'CHECK_IN' && a.isLate).length,
+                izin: userAttendances.filter((a: any) => ['PERMIT', 'SICK'].includes(a.type)).length,
+                alpha: userAttendances.filter((a: any) => a.type === 'ALPHA').length,
             };
 
             return {

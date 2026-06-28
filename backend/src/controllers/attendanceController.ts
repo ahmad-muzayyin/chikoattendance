@@ -1035,7 +1035,10 @@ export const getMonthlyHistory = async (req: AuthRequest, res: Response) => {
         const grouped: any = {};
 
         attendances.forEach(att => {
-            const dateStr = new Date(att.timestamp).toISOString().split('T')[0];
+            // Fix timezone bug: use WIB instead of UTC
+            const localDate = new Date(new Date(att.timestamp).getTime() + (7 * 60 * 60 * 1000));
+            const dateStr = localDate.toISOString().split('T')[0];
+            
             if (!grouped[dateStr]) {
                 grouped[dateStr] = {
                     date: dateStr,
@@ -1050,6 +1053,12 @@ export const getMonthlyHistory = async (req: AuthRequest, res: Response) => {
                 grouped[dateStr].checkIn = att;
             } else if (att.type === AttendanceType.CHECK_OUT) {
                 grouped[dateStr].checkOut = att;
+            } else if (att.type === AttendanceType.SICK) {
+                grouped[dateStr].sick = att;
+            } else if (att.type === AttendanceType.PERMIT) {
+                grouped[dateStr].permit = att;
+            } else if (att.type === AttendanceType.ALPHA) {
+                grouped[dateStr].alpha = att;
             }
 
             // Keep all raw events just in case
