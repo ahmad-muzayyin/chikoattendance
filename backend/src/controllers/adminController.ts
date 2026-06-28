@@ -568,7 +568,7 @@ export const getDailyAttendanceRecords = async (req: Request, res: Response) => 
 
 export const createManualAttendance = async (req: Request, res: Response) => {
     try {
-        const { userId, type, timestamp, notes, deviceId = 'MANUAL_DASHBOARD' } = req.body;
+        const { userId, type, timestamp, notes, isLate, deviceId = 'MANUAL_DASHBOARD' } = req.body;
         // Find user branch to use its coordinates for manual insertion
         const user = await User.findByPk(userId, { include: [Branch] });
         let latitude = 0;
@@ -586,7 +586,7 @@ export const createManualAttendance = async (req: Request, res: Response) => {
             longitude,
             deviceId,
             notes: notes || 'Ditambahkan manual dari dashboard',
-            isLate: false,
+            isLate: isLate || false,
             isOvertime: false,
             isHalfDay: false
         });

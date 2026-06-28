@@ -37,7 +37,8 @@ const Attendance = () => {
     userId: '',
     type: 'CHECK_IN',
     timestamp: '',
-    notes: ''
+    notes: '',
+    isLate: false
   });
 
   useEffect(() => {
@@ -87,7 +88,8 @@ const Attendance = () => {
       userId: userId || (employees.length > 0 ? employees[0].id : ''),
       type,
       timestamp: localDateTime,
-      notes: 'Ditambahkan manual dari dashboard'
+      notes: 'Ditambahkan manual dari dashboard',
+      isLate: false
     });
     setShowModal(true);
   };
@@ -102,7 +104,8 @@ const Attendance = () => {
       userId: '',
       type: record.type,
       timestamp: localDateTime,
-      notes: record.notes || ''
+      notes: record.notes || '',
+      isLate: record.isLate
     });
     setShowModal(true);
   };
@@ -164,12 +167,21 @@ const Attendance = () => {
     return Array.from(map.values());
   }, [records]);
 
+  const renderBadge = (type: string) => {
+    switch (type) {
+      case 'SICK': return <span className="badge badge-warning" style={{ fontSize: '0.75rem' }}>Sakit</span>;
+      case 'PERMIT': return <span className="badge badge-primary" style={{ fontSize: '0.75rem' }}>Izin</span>;
+      case 'ALPHA': return <span className="badge badge-danger" style={{ fontSize: '0.75rem' }}>Alpha</span>;
+      default: return null;
+    }
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Pemantauan Absensi Harian</h1>
-        <button className="btn btn-primary" onClick={() => openAddModal()}>
-          <Plus size={18} /> Tambah Manual
+        <button className="btn btn-primary" onClick={() => openAddModal('', 'SICK')}>
+          <Plus size={18} /> Tambah Data
         </button>
       </div>
 
@@ -193,7 +205,7 @@ const Attendance = () => {
         ) : groupedData.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
             <Search size={48} style={{ opacity: 0.2, margin: '0 auto 1rem' }} />
-            Belum ada karyawan yang absen pada tanggal ini.
+            Belum ada karyawan yang absen atau izin pada tanggal ini.
           </div>
         ) : (
           <table>
@@ -202,7 +214,8 @@ const Attendance = () => {
                 <th>Nama Karyawan</th>
                 <th>Check In (Masuk)</th>
                 <th>Check Out (Pulang)</th>
-                <th>Catatan</th>
+                <th>Status / Izin</th>
+                <th>Catatan Khusus</th>
               </tr>
             </thead>
             <tbody>
@@ -256,10 +269,32 @@ const Attendance = () => {
                     )}
                   </td>
 
+                  {/* Other Statuses Column */}
+                  <td>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      {row.other.map(rec => (
+                        <div key={rec.id} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          {renderBadge(rec.type)}
+                          <button className="btn btn-outline" style={{ padding: '0.2rem', border: 'none' }} onClick={() => openEditModal(rec)} title="Edit Izin/Sakit">
+                            <Edit size={12} />
+                          </button>
+                          <button className="btn btn-outline" style={{ padding: '0.2rem', border: 'none', color: 'var(--danger-color)' }} onClick={() => handleDelete(rec.id)} title="Hapus">
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ))}
+                      {row.other.length === 0 && (
+                        <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', borderStyle: 'dashed' }} onClick={() => openAddModal(row.user.id, 'SICK')}>
+                          + Izin/Sakit
+                        </button>
+                      )}
+                    </div>
+                  </td>
+
                   <td style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                    {row.checkIn?.notes && <div>In: {row.checkIn.notes}</div>}
-                    {row.checkOut?.notes && <div>Out: {row.checkOut.notes}</div>}
-                    {!row.checkIn?.notes && !row.checkOut?.notes && '-'}
+                    {row.checkIn?.notes && <div style={{marginBottom: '0.25rem'}}>In: {row.checkIn.notes}</div>}
+                    {row.checkOut?.notes && <div style={{marginBottom: '0.25rem'}}>Out: {row.checkOut.notes}</div>}
+                    {row.other.map(o => o.notes ? <div key={o.id}>{o.type}: {o.notes}</div> : null)}
                   </td>
                 </tr>
               ))}
@@ -272,7 +307,7 @@ const Attendance = () => {
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '400px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2 style={{ margin: 0 }}>{modalMode === 'add' ? 'Tambah Absen Manual' : 'Edit Jam Absen'}</h2>
+              <h2 style={{ margin: 0 }}>{modalMode === 'add' ? 'Tambah Data Manual' : 'Edit Data'}</h2>
               <button onClick={() => setShowModal(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
                 <X size={24} />
               </button>
@@ -297,13 +332,13 @@ const Attendance = () => {
               )}
 
               <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Jenis Absen</label>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Jenis Absen/Keterangan</label>
                 <select className="input-field" value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value})}>
                   <option value="CHECK_IN">Masuk (CHECK IN)</option>
                   <option value="CHECK_OUT">Pulang (CHECK OUT)</option>
-                  <option value="SICK">Sakit</option>
-                  <option value="PERMIT">Izin</option>
-                  <option value="ALPHA">Alpha / Bolos</option>
+                  <option value="SICK">Sakit (SICK)</option>
+                  <option value="PERMIT">Izin (PERMIT)</option>
+                  <option value="ALPHA">Bolos (ALPHA)</option>
                 </select>
               </div>
 
@@ -312,9 +347,22 @@ const Attendance = () => {
                 <input required type="datetime-local" className="input-field" value={formData.timestamp} onChange={(e) => setFormData({...formData, timestamp: e.target.value})} />
               </div>
 
+              {formData.type === 'CHECK_IN' && (
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={formData.isLate} 
+                      onChange={(e) => setFormData({...formData, isLate: e.target.checked})} 
+                    />
+                    Tandai sebagai Terlambat
+                  </label>
+                </div>
+              )}
+
               <div>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Catatan Khusus</label>
-                <textarea className="input-field" rows={2} value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})} placeholder="Contoh: Lupa absen pulang, dikoreksi admin" />
+                <textarea className="input-field" rows={2} value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})} placeholder="Alasan terlambat / izin / dll" />
               </div>
 
               <div style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
