@@ -25,6 +25,7 @@ interface AttendanceRecord {
 const Attendance = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -164,8 +165,12 @@ const Attendance = () => {
       }
     });
 
-    return Array.from(map.values());
-  }, [records]);
+    const filteredMap = Array.from(map.values()).filter(row => 
+      row.user.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    return filteredMap;
+  }, [records, searchQuery]);
 
   const renderBadge = (type: string) => {
     switch (type) {
@@ -185,17 +190,34 @@ const Attendance = () => {
         </button>
       </div>
 
-      <div className="card" style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <Calendar size={20} style={{ color: 'var(--text-secondary)' }} />
-        <div>
-          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Pilih Tanggal:</label>
-          <input 
-            type="date" 
-            className="input-field" 
-            value={selectedDate} 
-            onChange={handleDateChange} 
-            style={{ minWidth: '200px' }}
-          />
+      <div className="card" style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <Calendar size={20} style={{ color: 'var(--text-secondary)' }} />
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Pilih Tanggal:</label>
+            <input 
+              type="date" 
+              className="input-field" 
+              value={selectedDate} 
+              onChange={handleDateChange} 
+              style={{ minWidth: '200px' }}
+            />
+          </div>
+        </div>
+        
+        <div style={{ flex: 1, minWidth: '250px' }}>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Cari Nama Karyawan:</label>
+          <div style={{ position: 'relative' }}>
+            <Search size={18} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+            <input 
+              type="text" 
+              className="input-field" 
+              placeholder="Ketik nama karyawan..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ width: '100%', paddingLeft: '2.5rem' }}
+            />
+          </div>
         </div>
       </div>
 
