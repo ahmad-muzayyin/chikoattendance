@@ -1,7 +1,7 @@
 // d:\AHMAD MUZAYYIN\ChikoAttendance\backend\src\routes\adminRoutes.ts
 import { Router } from 'express';
 import { authenticateToken, requireRole } from '../middleware/authMiddleware';
-import { getEmployees, getDailyMonitoring, getEmployeeAttendance, addPunishment, createUser, updateUser, deleteUser, getUserDetail, getUserPoints, createManualAttendance, updateAttendance, deleteAttendance } from '../controllers/adminController';
+import { getEmployees, getDailyMonitoring, getEmployeeAttendance, getRawAttendance, addPunishment, createUser, updateUser, deleteUser, getUserDetail, getUserPoints, createManualAttendance, updateAttendance, deleteAttendance } from '../controllers/adminController';
 import { getSettings, updateSettings } from '../controllers/settingsController';
 import { triggerBackup, getBackups, downloadBackup, deleteBackup } from '../controllers/backupController';
 
@@ -13,6 +13,7 @@ router.use(requireRole(['OWNER', 'HEAD', 'SUPERVISOR']));
 
 router.get('/employees', getEmployees);
 router.get('/monitoring', getDailyMonitoring);
+router.get('/attendance/raw/:userId', getRawAttendance);
 router.get('/attendance/:userId', getEmployeeAttendance);
 router.post('/attendance/manual', createManualAttendance);
 router.put('/attendance/:id', updateAttendance);

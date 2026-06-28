@@ -498,6 +498,22 @@ export const getUserPoints = async (req: Request, res: Response) => {
     }
 };
 
+// Get raw attendance records for manual editing in dashboard
+export const getRawAttendance = async (req: Request, res: Response) => {
+    try {
+        const { userId } = req.params;
+        const records = await Attendance.findAll({
+            where: { userId },
+            order: [['timestamp', 'DESC']],
+            limit: 100 // Get latest 100 records
+        });
+        res.json(records);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 export const createManualAttendance = async (req: Request, res: Response) => {
     try {
         const { userId, type, timestamp, notes, deviceId = 'MANUAL_DASHBOARD' } = req.body;

@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import apiClient from '../api/client';
 import { Edit, Plus, Trash2, X, Search } from 'lucide-react';
 import { format } from 'date-fns';
-import { id } from 'date-fns/locale';
 
 interface Employee {
   id: string;
@@ -40,7 +39,7 @@ const Attendance = () => {
     const fetchEmps = async () => {
       try {
         const res = await apiClient.get('/admin/employees');
-        setEmployees(res.data || []);
+        setEmployees(Array.isArray(res.data) ? res.data : []);
       } catch (e) {
         console.error(e);
       }
@@ -52,8 +51,8 @@ const Attendance = () => {
     if (!userId) return;
     setLoading(true);
     try {
-      const res = await apiClient.get(`/admin/attendance/${userId}`);
-      setRecords(res.data || []);
+      const res = await apiClient.get(`/admin/attendance/raw/${userId}`);
+      setRecords(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
       console.error(error);
       alert('Gagal mengambil data absensi.');
@@ -147,7 +146,7 @@ const Attendance = () => {
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <select className="input-field" value={selectedUserId} onChange={handleUserSelect} style={{ maxWidth: '400px' }}>
             <option value="">-- Pilih Karyawan --</option>
-            {employees.map(emp => (
+            {Array.isArray(employees) && employees.map(emp => (
               <option key={emp.id} value={emp.id}>{emp.name} ({emp.role})</option>
             ))}
           </select>
@@ -161,7 +160,7 @@ const Attendance = () => {
             <Search size={48} style={{ opacity: 0.2, margin: '0 auto 1rem' }} />
             Silakan pilih karyawan di atas untuk melihat dan mengedit riwayat absensinya.
           </div>
-        ) : records.length === 0 ? (
+        ) : !Array.isArray(records) || records.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
             Belum ada riwayat absensi.
           </div>
@@ -177,11 +176,11 @@ const Attendance = () => {
               </tr>
             </thead>
             <tbody>
-              {records.map((rec) => (
+              {Array.isArray(records) && records.map((rec) => (
                 <tr key={rec.id}>
                   <td>
                     <div style={{ fontWeight: 500 }}>
-                      {format(new Date(rec.timestamp), 'dd MMM yyyy, HH:mm', { locale: id })}
+                      {format(new Date(rec.timestamp), 'dd MMM yyyy, HH:mm')}
                     </div>
                   </td>
                   <td>

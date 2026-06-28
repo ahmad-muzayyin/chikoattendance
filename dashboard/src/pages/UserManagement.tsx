@@ -41,8 +41,8 @@ const UserManagement = () => {
         apiClient.get('/admin/employees'),
         apiClient.get('/branches')
       ]);
-      setEmployees(empRes.data || []);
-      setBranches(branchRes.data || []);
+      setEmployees(Array.isArray(empRes.data) ? empRes.data : []);
+      setBranches(Array.isArray(branchRes.data) ? branchRes.data : []);
     } catch (error) {
       console.error('Failed to fetch data', error);
       alert('Gagal mengambil data.');
@@ -134,7 +134,7 @@ const UserManagement = () => {
               </tr>
             </thead>
             <tbody>
-              {employees.length === 0 ? (
+              {!Array.isArray(employees) || employees.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
                     Tidak ada data karyawan
@@ -212,7 +212,7 @@ const UserManagement = () => {
                   <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Penempatan Outlet</label>
                   <select className="input-field" value={formData.branchId} onChange={(e) => setFormData({...formData, branchId: e.target.value})}>
                     <option value="">-- Pilih Outlet --</option>
-                    {branches.map(b => (
+                    {Array.isArray(branches) && branches.map(b => (
                       <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </select>
