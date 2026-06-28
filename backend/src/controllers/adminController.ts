@@ -497,3 +497,72 @@ export const getUserPoints = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+export const createManualAttendance = async (req: Request, res: Response) => {
+    try {
+        const { userId, type, timestamp, notes, deviceId = 'MANUAL_DASHBOARD' } = req.body;
+        // Find user branch to use its coordinates for manual insertion
+        const user = await User.findByPk(userId, { include: [Branch] });
+        let latitude = 0;
+        let longitude = 0;
+        if (user && user.Branch) {
+            latitude = (user.Branch as any).latitude;
+            longitude = (user.Branch as any).longitude;
+        }
+
+        const attendance = await Attendance.create({
+            userId,
+            type,
+            timestamp: new Date(timestamp),
+            latitude,
+            longitude,
+            deviceId,
+            notes: notes || 'Ditambahkan manual dari dashboard',
+            isLate: false,
+            isOvertime: false,
+            isHalfDay: false
+        });
+        res.json({ message: 'Absensi berhasil ditambahkan', data: attendance });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Gagal menambahkan absensi manual' });
+    }
+};
+
+export const updateAttendance = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { type, timestamp, notes, isLate, isOvertime } = req.body;
+        
+        const attendance = await Attendance.findByPk(id);
+        if (!attendance) return res.status(404).json({ message: 'Data absensi tidak ditemukan' });
+
+        await attendance.update({
+            type: type || attendance.type,
+            timestamp: timestamp ? new Date(timestamp) : attendance.timestamp,
+            notes: notes !== undefined ? notes : attendance.notes,
+            isLate: isLate !== undefined ? isLate : attendance.isLate,
+            isOvertime: isOvertime !== undefined ? isOvertime : attendance.isOvertime,
+        });
+
+        res.json({ message: 'Data absensi berhasil diupdate', data: attendance });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Gagal mengupdate absensi' });
+    }
+};
+
+export const deleteAttendance = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const attendance = await Attendance.findByPk(id);
+        if (!attendance) return res.status(404).json({ message: 'Data absensi tidak ditemukan' });
+
+        await attendance.destroy();
+        res.json({ message: 'Data absensi berhasil dihapus' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Gagal menghapus absensi' });
+    }
+};
+
