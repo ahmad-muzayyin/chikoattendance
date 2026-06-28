@@ -514,6 +514,58 @@ export const getRawAttendance = async (req: Request, res: Response) => {
     }
 };
 
+// Get all attendance records for a specific date (for all users in branch)
+export const getDailyAttendanceRecords = async (req: Request, res: Response) => {
+    try {
+        const { date } = req.params; // format: YYYY-MM-DD
+        const targetDate = new Date(date);
+        
+        if (isNaN(targetDate.getTime())) {
+            return res.status(400).json({ message: 'Invalid date format' });
+        }
+
+        const startOfDay = new Date(targetDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        
+        const endOfDay = new Date(targetDate);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        // Scope for HEAD
+        const authReq = req as any;
+        const userWhere: any = {};
+        
+        if (authReq.user && authReq.user.role === 'HEAD') {
+            const headUser = await User.findByPk(authReq.user.id);
+            if (headUser && headUser.branchId) {
+                userWhere.branchId = headUser.branchId;
+                userWhere.role = { [Op.ne]: 'OWNER' };
+            } else {
+                return res.json([]);
+            }
+        }
+
+        const records = await Attendance.findAll({
+            where: {
+                timestamp: {
+                    [Op.gte]: startOfDay,
+                    [Op.lte]: endOfDay
+                }
+            },
+            include: [{ 
+                model: User, 
+                attributes: ['id', 'name', 'role'],
+                where: userWhere
+            }],
+            order: [['timestamp', 'DESC']]
+        });
+        
+        res.json(records);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 export const createManualAttendance = async (req: Request, res: Response) => {
     try {
         const { userId, type, timestamp, notes, deviceId = 'MANUAL_DASHBOARD' } = req.body;
